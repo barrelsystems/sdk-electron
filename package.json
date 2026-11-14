@@ -25,12 +25,12 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "electron": "^34.0.0",
+    "electron": "^42.11.16",
     "oxfmt": "0.73.0",
     "oxlint": "1.88.0",
     "tsdown": "^0.9.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^5.1.0"
   },
   "peerDependencies": {
     "electron": ">=30.0.0"
