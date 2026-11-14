@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee /tmp/pnpm-install.log
+          if grep -q "Ignored build scripts" /tmp/pnpm-install.log; then
+            echo "::error::pnpm ignored a dependency build script. Run 'pnpm approve-builds' and explicitly allow or reject before merging."
+            exit 1
+          fi
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test -- --run
+
+      - name: Build
+        run: pnpm build
