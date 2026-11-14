@@ -35,6 +35,9 @@
   "peerDependencies": {
     "electron": ">=30.0.0"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "packageManager": "pnpm@10.13.1",
   "pnpm": {
     "onlyBuiltDependencies": [
