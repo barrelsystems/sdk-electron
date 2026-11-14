@@ -35,5 +35,12 @@
   "peerDependencies": {
     "electron": ">=30.0.0"
   },
-  "packageManager": "pnpm@10.13.1"
+  "packageManager": "pnpm@10.13.1",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "rolldown"
+    ]
+  }
 }
