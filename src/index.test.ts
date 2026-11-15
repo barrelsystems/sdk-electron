@@ -14,6 +14,17 @@ vi.mock("electron", () => ({
   powerMonitor: { on: vi.fn() },
 }));
 
+// index.test.ts covers init()'s own contract, not updater internals (see
+// src/adapters/*.test.ts) -- this keeps it from exercising real
+// electron-updater construction, which needs a real Electron process.
+vi.mock("./adapters/createUpdaterAdapter.js", () => ({
+  createUpdaterAdapter: async () => ({
+    getAdapterState: () => ({ type: "idle" }),
+    checkForUpdates: () => {},
+    getLastUpdateError: () => undefined,
+  }),
+}));
+
 describe("init", () => {
   beforeEach(() => {
     vi.resetModules();
