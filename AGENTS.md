@@ -11,7 +11,9 @@ This SDK ships inside other people's apps — every dependency and byte is a
 cost to them, not us. Default to native platform APIs (`node:crypto`,
 `node:fs`, `node:os`) over a package; a new runtime dependency needs a
 specific reason the native API can't cover. No general-purpose utility or
-effect-system libraries.
+effect-system libraries. The one sanctioned exception: a library this SDK
+wraps rather than merely uses (e.g. `electron-updater`) — declared as an
+optional peer dependency, detected at runtime, never a plain dependency.
 
 ## Error handling
 

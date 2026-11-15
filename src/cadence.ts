@@ -16,6 +16,7 @@ export interface CadenceParams {
   attributes: Record<string, string>;
   getAdapterState: () => AdapterState;
   onPolicyResponse: (response: CheckInResponse | undefined) => void;
+  checkForUpdates: () => void;
   log?: ((message: string) => void) | undefined;
 }
 
@@ -43,6 +44,7 @@ export function startCadence(params: CadenceParams): void {
     }
     inFlight = true;
     try {
+      params.checkForUpdates();
       const env = collectEnvironment();
       const response = await sendCheckIn({
         baseUrl: params.baseUrl,
