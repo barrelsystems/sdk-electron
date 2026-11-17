@@ -4,8 +4,18 @@ import { createUpdaterAdapter } from "./adapters/createUpdaterAdapter.js";
 import type { UpdaterAdapter } from "./adapters/electronUpdaterAdapter.js";
 import { startCadence } from "./cadence.js";
 import { BarrelConfigError } from "./errors.js";
-import { getOrCreateInstallationId } from "./installationId.js";
 import { DEFAULT_BASE_URL, PUBLIC_ED25519_KEY_PEM } from "./keys.js";
+import {
+  clearBufferedFacts,
+  configureBufferedFacts,
+  getBufferedFacts,
+} from "./persistence/bufferedFacts.js";
+import { getOrCreateInstallationId } from "./persistence/installationId.js";
+import {
+  applyKeyRotationIfPresent,
+  getOrCreateTrustedKey,
+  getTrustedKey,
+} from "./persistence/keyRotation.js";
 import { verifyAndParsePolicy } from "./policy.js";
 import type { InitConfig, Policy, UpdateFailure } from "./types.js";
 import { DEFAULT_INTERVAL_MS } from "./cadence.js";
@@ -43,29 +53,37 @@ export function init(config: InitConfig): void {
   const checkInIntervalMs = config.checkInIntervalMs ?? DEFAULT_INTERVAL_MS;
   const attributes = config.attributes ?? {};
   const installationIdPath = join(app.getPath("userData"), "barrel-installation.json");
+  const bufferedFactsPath = join(app.getPath("userData"), "barrel-buffered-facts.json");
+  const trustedKeyPath = join(app.getPath("userData"), "barrel-trusted-key.json");
 
-  void Promise.all([getOrCreateInstallationId(installationIdPath), createUpdaterAdapter()]).then(
-    ([installationId, adapter]) => {
-      updaterAdapter = adapter;
-      startCadence({
-        baseUrl,
-        credential: config.credential,
-        installationId,
-        checkInIntervalMs,
-        sdkVersion: __SDK_VERSION__,
-        attributes,
-        log: debugLog,
-        getAdapterState: () => adapter.getAdapterState(),
-        checkForUpdates: () => adapter.checkForUpdates(),
-        onPolicyResponse: (response) => {
-          if (!response) return; // fail open — keep the last-known Policy
-          const parsed = verifyAndParsePolicy(response, PUBLIC_ED25519_KEY_PEM);
-          if (parsed) lastKnownPolicy = parsed;
-          debugLog?.(parsed ? "policy: verified and updated" : "policy: verification failed");
-        },
-      });
-    },
-  );
+  void Promise.all([
+    getOrCreateInstallationId(installationIdPath),
+    createUpdaterAdapter(),
+    configureBufferedFacts(bufferedFactsPath),
+    getOrCreateTrustedKey(trustedKeyPath, PUBLIC_ED25519_KEY_PEM),
+  ]).then(([installationId, adapter]) => {
+    updaterAdapter = adapter;
+    startCadence({
+      baseUrl,
+      credential: config.credential,
+      installationId,
+      checkInIntervalMs,
+      sdkVersion: __SDK_VERSION__,
+      attributes,
+      log: debugLog,
+      getAdapterState: () => adapter.getAdapterState(),
+      getBufferedFacts,
+      clearBufferedFacts,
+      checkForUpdates: () => adapter.checkForUpdates(),
+      onPolicyResponse: (response) => {
+        if (!response) return; // fail open — keep the last-known Policy
+        const parsed = verifyAndParsePolicy(response, getTrustedKey() ?? PUBLIC_ED25519_KEY_PEM);
+        if (parsed) lastKnownPolicy = parsed;
+        debugLog?.(parsed ? "policy: verified and updated" : "policy: verification failed");
+        applyKeyRotationIfPresent(response); // takes effect from the next check-in on
+      },
+    });
+  });
 }
 
 /** Synchronous getter. `undefined` before the first successful check-in — never a synthesized default. */

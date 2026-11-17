@@ -1,5 +1,6 @@
 import { buildFailureState } from "../errorTaxonomy.js";
 import { guardAdapterCallback } from "../internalDefects.js";
+import { recordAdapterStateFact, recordUpdateErrorFact } from "../persistence/bufferedFacts.js";
 import type { AdapterState, UpdateFailure } from "../types.js";
 import { mapElectronUpdaterError } from "./electronUpdaterErrorMap.js";
 
@@ -31,44 +32,49 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
   let lastError: UpdateFailure | undefined;
   let currentPhase: "check" | "download" | "idle" = "idle";
 
+  function setState(newState: AdapterState): void {
+    state = newState;
+    recordAdapterStateFact(newState);
+  }
+
   updater.on("checking-for-update", () => {
     guardAdapterCallback("electron-updater:checking-for-update", () => {
       currentPhase = "check";
-      state = { type: "checking" };
+      setState({ type: "checking" });
     });
   });
 
   updater.on("update-not-available", () => {
     guardAdapterCallback("electron-updater:update-not-available", () => {
       currentPhase = "idle";
-      state = { type: "idle" };
+      setState({ type: "idle" });
     });
   });
 
   updater.on("update-available", () => {
     guardAdapterCallback("electron-updater:update-available", () => {
       currentPhase = "download";
-      state = { type: "available" };
+      setState({ type: "available" });
     });
   });
 
   updater.on("download-progress", (info) => {
     guardAdapterCallback("electron-updater:download-progress", () => {
-      state = { type: "downloading", progress: Math.round(info.percent) };
+      setState({ type: "downloading", progress: Math.round(info.percent) });
     });
   });
 
   updater.on("update-downloaded", () => {
     guardAdapterCallback("electron-updater:update-downloaded", () => {
       currentPhase = "idle";
-      state = { type: "downloaded" };
+      setState({ type: "downloaded" });
     });
   });
 
   updater.on("update-cancelled", () => {
     guardAdapterCallback("electron-updater:update-cancelled", () => {
       currentPhase = "idle";
-      state = { type: "update-cancelled" };
+      setState({ type: "update-cancelled" });
     });
   });
 
@@ -78,8 +84,9 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
       const platformCode = error.code ?? error.message;
       const built = buildFailureState("electron-updater", failureMode, phase, platformCode);
       lastError = built.failure;
-      state = built.state;
+      setState(built.state);
       currentPhase = "idle";
+      recordUpdateErrorFact(built.failure);
     });
   });
 

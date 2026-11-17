@@ -12,6 +12,7 @@ const baseParams: CheckInParams = {
   osVersion: "24.0.0",
   attributes: {},
   adapterState: { type: "idle" },
+  bufferedFacts: [],
 };
 
 describe("sendCheckIn", () => {
@@ -39,6 +40,26 @@ describe("sendCheckIn", () => {
     expect(body.protocolVersion).toBe(1);
     expect(body.bufferedFacts).toEqual([]);
     expect(typeof body.eventId).toBe("string");
+  });
+
+  it("sends the caller-supplied bufferedFacts snapshot verbatim", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const bufferedFacts: CheckInParams["bufferedFacts"] = [
+      {
+        kind: "adapterState",
+        state: { type: "checking" },
+        firstObservedAt: "2026-01-01T00:00:00.000Z",
+        lastObservedAt: "2026-01-01T00:00:00.000Z",
+        occurrenceCount: 1,
+      },
+    ];
+
+    await sendCheckIn({ ...baseParams, bufferedFacts });
+    const call = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(call[1].body as string);
+    expect(body.bufferedFacts).toEqual(bufferedFacts);
   });
 
   it("fails open (undefined) on a non-2xx response, without retrying", async () => {

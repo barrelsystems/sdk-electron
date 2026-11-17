@@ -1,6 +1,7 @@
 import type { AutoUpdater } from "electron";
 import { buildFailureState } from "../errorTaxonomy.js";
 import { guardAdapterCallback } from "../internalDefects.js";
+import { recordAdapterStateFact, recordUpdateErrorFact } from "../persistence/bufferedFacts.js";
 import type { AdapterState, UpdateFailure } from "../types.js";
 import { mapBuiltinUpdaterError } from "./builtinUpdaterErrorMap.js";
 import type { UpdaterAdapter } from "./electronUpdaterAdapter.js";
@@ -14,27 +15,32 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
   let state: AdapterState = { type: "idle" };
   let lastError: UpdateFailure | undefined;
 
+  function setState(newState: AdapterState): void {
+    state = newState;
+    recordAdapterStateFact(newState);
+  }
+
   updater.on("checking-for-update", () => {
     guardAdapterCallback("electron-builtin:checking-for-update", () => {
-      state = { type: "checking" };
+      setState({ type: "checking" });
     });
   });
 
   updater.on("update-not-available", () => {
     guardAdapterCallback("electron-builtin:update-not-available", () => {
-      state = { type: "idle" };
+      setState({ type: "idle" });
     });
   });
 
   updater.on("update-available", () => {
     guardAdapterCallback("electron-builtin:update-available", () => {
-      state = { type: "available" };
+      setState({ type: "available" });
     });
   });
 
   updater.on("update-downloaded", () => {
     guardAdapterCallback("electron-builtin:update-downloaded", () => {
-      state = { type: "downloaded" };
+      setState({ type: "downloaded" });
     });
   });
 
@@ -43,7 +49,8 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
       const { failureMode, phase } = mapBuiltinUpdaterError("checking");
       const built = buildFailureState("electron-builtin", failureMode, phase, error.message);
       lastError = built.failure;
-      state = built.state;
+      setState(built.state);
+      recordUpdateErrorFact(built.failure);
     });
   });
 
@@ -56,7 +63,8 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
         const platformCode = error instanceof Error ? error.message : String(error);
         const built = buildFailureState("electron-builtin", failureMode, phase, platformCode);
         lastError = built.failure;
-        state = built.state;
+        setState(built.state);
+        recordUpdateErrorFact(built.failure);
       }
     },
     getAdapterState: () => state,
