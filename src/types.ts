@@ -1,4 +1,5 @@
 import type { Phase } from "./errorTaxonomy.js";
+import type { BufferedFact } from "./persistence/bufferedFacts.js";
 
 export const PROTOCOL_VERSION = 1;
 
@@ -84,8 +85,7 @@ export interface CheckInRequest {
   osVersion: string;
   attributes: Record<string, string>;
   adapterState: AdapterState;
-  /** Always empty until the local fact buffer is implemented. */
-  bufferedFacts: readonly [];
+  bufferedFacts: readonly BufferedFact[];
 }
 
 export type Policy =
@@ -102,4 +102,11 @@ export interface CheckInResponse {
   protocolVersion: typeof PROTOCOL_VERSION;
   policy: string;
   signature: string;
+  /**
+   * A key-rotation announcement: a new public key, signed by the key this SDK
+   * currently trusts. Both absent when no rotation is in flight -- additive,
+   * never required by a server that has nothing to rotate.
+   */
+  nextPublicKeyPem?: string;
+  nextPublicKeySignature?: string;
 }
