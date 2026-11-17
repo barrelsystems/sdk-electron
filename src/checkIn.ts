@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { boundAttributes } from "./attributes.js";
+import type { BufferedFact } from "./persistence/bufferedFacts.js";
 import { PROTOCOL_VERSION } from "./types.js";
 import type { AdapterState, CheckInRequest, CheckInResponse } from "./types.js";
 
@@ -16,6 +17,7 @@ export interface CheckInParams {
   osVersion: string;
   attributes: Record<string, string>;
   adapterState: AdapterState;
+  bufferedFacts: readonly BufferedFact[];
   log?: ((message: string) => void) | undefined;
 }
 
@@ -37,7 +39,7 @@ export async function sendCheckIn(params: CheckInParams): Promise<CheckInRespons
     osVersion: params.osVersion,
     attributes: boundAttributes(params.attributes),
     adapterState: params.adapterState,
-    bufferedFacts: [],
+    bufferedFacts: params.bufferedFacts,
   };
 
   const controller = new AbortController();

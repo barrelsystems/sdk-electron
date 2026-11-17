@@ -2,6 +2,7 @@ import { app, powerMonitor } from "electron";
 import { sendCheckIn } from "./checkIn.js";
 import { collectEnvironment } from "./env.js";
 import { computeJitterFraction } from "./jitter.js";
+import type { BufferedFact } from "./persistence/bufferedFacts.js";
 import type { AdapterState, CheckInResponse } from "./types.js";
 
 export const DEFAULT_INTERVAL_MS = 30 * 60 * 1000;
@@ -15,6 +16,9 @@ export interface CadenceParams {
   sdkVersion: string;
   attributes: Record<string, string>;
   getAdapterState: () => AdapterState;
+  getBufferedFacts: () => readonly BufferedFact[];
+  /** Called only once ingestion ACKs the check-in that carried `sent` -- never optimistically. */
+  clearBufferedFacts: (sent: readonly BufferedFact[]) => void;
   onPolicyResponse: (response: CheckInResponse | undefined) => void;
   checkForUpdates: () => void;
   log?: ((message: string) => void) | undefined;
@@ -46,6 +50,10 @@ export function startCadence(params: CadenceParams): void {
     try {
       params.checkForUpdates();
       const env = collectEnvironment();
+      // Snapshotting before the request goes out, and clearing exactly this
+      // snapshot on ACK, is what keeps a fact recorded mid-flight from being
+      // wiped alongside facts that were actually sent.
+      const bufferedFacts = params.getBufferedFacts();
       const response = await sendCheckIn({
         baseUrl: params.baseUrl,
         credential: params.credential,
@@ -57,8 +65,10 @@ export function startCadence(params: CadenceParams): void {
         osVersion: env.osVersion,
         attributes: params.attributes,
         adapterState: params.getAdapterState(),
+        bufferedFacts,
         log: params.log,
       });
+      if (response !== undefined) params.clearBufferedFacts(bufferedFacts);
       params.onPolicyResponse(response);
     } finally {
       inFlight = false;
