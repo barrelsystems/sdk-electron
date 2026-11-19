@@ -1,5 +1,5 @@
 import type { Phase } from "./errorTaxonomy.js";
-import type { BufferedFact } from "./persistence/bufferedFacts.js";
+import type { FactTimestamps } from "./persistence/bufferedFacts.js";
 
 export const PROTOCOL_VERSION = 1;
 
@@ -9,16 +9,24 @@ export interface InitConfig {
   /** Developer-configurable; the server-enforced floor is 15 minutes regardless of what's passed here. */
   checkInIntervalMs?: number;
   attributes?: Record<string, string>;
+  /** On by default. When off, a found update is never downloaded. */
+  autoDownload?: boolean;
+  /** Where your own update feed lives. Omit to use whatever the host
+   * app's own packaging tool already configured at build time. */
+  updateFeedURL?: string;
   /** Off by default. Logs what the SDK is doing via `console.debug` -- never noisy unless opted in. */
   debug?: boolean;
+  /** Milliseconds. Default 24h; `init()` throws synchronously above the
+   * 7-day ceiling. A cached `held` Policy older than this fails open. */
+  holdCacheMaxAge?: number;
 }
 
 export type AdapterState =
   | { type: "idle" }
   | { type: "checking" }
-  | { type: "available" }
-  | { type: "downloading"; progress?: number }
-  | { type: "downloaded" }
+  | { type: "available"; releaseNotes?: string }
+  | { type: "downloading"; progress?: number; releaseNotes?: string }
+  | { type: "downloaded"; releaseNotes?: string }
   | { type: "update-cancelled" }
   | {
       type: "failed";
@@ -56,11 +64,9 @@ export type UpdateFailureMode =
   | "config-invalid"
   | "cors-misconfigured"
   | "platform-unsupported"
-  | "sdk-misuse"
   | "translocation-blocked"
   | "webkit-terminated"
   | "release-notes-failed"
-  | "update-check-declined"
   | "resume-appcast-failed"
   | "unknown";
 
@@ -72,6 +78,17 @@ export interface UpdateFailure {
   platform: "electron-updater" | "electron-builtin";
   platformCode: string;
 }
+
+/** The wire shape the backend's schema actually expects -- flatter than the
+ * internally persisted `BufferedFact` (see `protocol/checkIn.ts`'s `toWireBufferedFact`). */
+export type WireBufferedFact =
+  | ({ kind: "adapterState"; state: AdapterState } & FactTimestamps)
+  | ({
+      kind: "updateError";
+      phase: Phase;
+      failureMode: UpdateFailureMode;
+      platformCode: string;
+    } & FactTimestamps);
 
 export interface CheckInRequest {
   protocolVersion: typeof PROTOCOL_VERSION;
@@ -85,7 +102,7 @@ export interface CheckInRequest {
   osVersion: string;
   attributes: Record<string, string>;
   adapterState: AdapterState;
-  bufferedFacts: readonly BufferedFact[];
+  bufferedFacts: readonly WireBufferedFact[];
 }
 
 export type Policy =

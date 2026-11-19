@@ -9,7 +9,7 @@ const TERMINAL_ADAPTER_STATES = new Set<AdapterState["type"]>([
   "update-cancelled",
 ]);
 
-interface FactTimestamps {
+export interface FactTimestamps {
   firstObservedAt: string;
   lastObservedAt: string;
   occurrenceCount: number;
@@ -46,13 +46,9 @@ export function getBufferedFacts(): readonly BufferedFact[] {
 }
 
 /**
- * Clears exactly the facts in `sent` (a snapshot `getBufferedFacts()` returned
- * earlier) -- call only once ingestion ACKs the check-in that carried them,
- * never optimistically, and never a bare clear-everything: a fact recorded
- * after `sent` was taken (e.g. while that check-in was still in flight) was
- * never actually transmitted, so it must survive. Reference equality is
- * enough to tell the two apart, since a merge always replaces a fact's slot
- * with a new object rather than mutating it in place.
+ * Clears exactly the facts in `sent` (a snapshot `getBufferedFacts()`
+ * returned earlier) -- call only once ingestion ACKs that check-in, never
+ * optimistically: a fact recorded while it was still in flight must survive.
  */
 export function clearBufferedFacts(sent: readonly BufferedFact[]): void {
   buffer = buffer.filter((fact) => !sent.includes(fact));
@@ -99,8 +95,11 @@ function classify(fact: BufferedFact): FactClassification {
   if (state.type === "failed")
     return { discriminant: `adapterState:failed:${state.code}:${state.platformCode}`, priority: 1 };
 
+  // Differing release notes must never collapse into one fact and silently lose a version's notes.
+  const notesSuffix =
+    "releaseNotes" in state && state.releaseNotes !== undefined ? `:${state.releaseNotes}` : "";
   return {
-    discriminant: `adapterState:${state.type}`,
+    discriminant: `adapterState:${state.type}${notesSuffix}`,
     priority: TERMINAL_ADAPTER_STATES.has(state.type) ? 1 : 0,
   };
 }

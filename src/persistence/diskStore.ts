@@ -5,8 +5,7 @@ import { dirname } from "node:path";
 /**
  * Mirrors an in-memory value to disk: a non-blocking write on `persist()`,
  * fail-open on any disk error, and a synchronous exit-time fallback -- the
- * shape every local-state module in this SDK needs (installation ID,
- * bufferedFacts, the trusted key).
+ * shape every local-state module in this SDK needs.
  */
 export interface DiskStore {
   persist(): Promise<void>;

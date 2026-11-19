@@ -5,6 +5,7 @@ import { recordAdapterStateFact, recordUpdateErrorFact } from "../persistence/bu
 import type { AdapterState, UpdateFailure } from "../types.js";
 import { mapBuiltinUpdaterError } from "./builtinUpdaterErrorMap.js";
 import type { UpdaterAdapter } from "./electronUpdaterAdapter.js";
+import { createListenerSet } from "./listenerSet.js";
 
 /**
  * Owns Electron's built-in `autoUpdater` singleton entirely. Never
@@ -14,10 +15,12 @@ import type { UpdaterAdapter } from "./electronUpdaterAdapter.js";
 export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapter {
   let state: AdapterState = { type: "idle" };
   let lastError: UpdateFailure | undefined;
+  const stateChangeListeners = createListenerSet<AdapterState>();
 
   function setState(newState: AdapterState): void {
     state = newState;
     recordAdapterStateFact(newState);
+    stateChangeListeners.notify(newState);
   }
 
   updater.on("checking-for-update", () => {
@@ -38,9 +41,15 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
     });
   });
 
-  updater.on("update-downloaded", () => {
+  // Electron's own types pass `releaseNotes` as the second positional
+  // argument here -- `update-available` carries no such payload, so
+  // `available` never gets release notes, only `downloaded` does.
+  updater.on("update-downloaded", (_event, releaseNotes) => {
     guardAdapterCallback("electron-builtin:update-downloaded", () => {
-      setState({ type: "downloaded" });
+      setState({
+        type: "downloaded",
+        ...(releaseNotes !== "" && releaseNotes !== undefined && { releaseNotes }),
+      });
     });
   });
 
@@ -67,7 +76,18 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
         recordUpdateErrorFact(built.failure);
       }
     },
+    // No lever exists here: `update-available` already means Squirrel.Mac
+    // started downloading silently the moment `checkForUpdates()` found
+    // something -- there's nothing left to trigger.
+    downloadUpdate() {},
+    quitAndInstall() {
+      updater.quitAndInstall();
+    },
+    setFeedURL(url) {
+      updater.setFeedURL({ url });
+    },
     getAdapterState: () => state,
     getLastUpdateError: () => lastError,
+    onStateChange: stateChangeListeners.add,
   };
 }

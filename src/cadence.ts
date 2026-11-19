@@ -1,12 +1,14 @@
 import { app, powerMonitor } from "electron";
-import { sendCheckIn } from "./checkIn.js";
+import { sendCheckIn } from "./protocol/checkIn.js";
 import { collectEnvironment } from "./env.js";
 import { computeJitterFraction } from "./jitter.js";
 import type { BufferedFact } from "./persistence/bufferedFacts.js";
-import type { AdapterState, CheckInResponse } from "./types.js";
+import type { AdapterState, CheckInResponse, Policy } from "./types.js";
 
 export const DEFAULT_INTERVAL_MS = 30 * 60 * 1000;
 export const MIN_INTERVAL_MS = 15 * 60 * 1000;
+export const DEFAULT_HOLD_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export const MAX_HOLD_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface CadenceParams {
   baseUrl: string;
@@ -21,7 +23,25 @@ export interface CadenceParams {
   clearBufferedFacts: (sent: readonly BufferedFact[]) => void;
   onPolicyResponse: (response: CheckInResponse | undefined) => void;
   checkForUpdates: () => void;
+  getPolicy: () => Policy | undefined;
+  holdCacheMaxAge: number;
   log?: ((message: string) => void) | undefined;
+}
+
+/**
+ * `undefined`/`current`/`updateEligible` never hold the check -- only a
+ * confirmed `held` Policy within its ceiling (the earlier of `holdCacheMaxAge`
+ * and the operator's own `until`) does, so an offline client fails open.
+ */
+export function policyHoldsTheVendorCheck(
+  policy: Policy | undefined,
+  holdCacheMaxAge: number,
+  now: number,
+): boolean {
+  if (policy?.type !== "held") return false;
+  if (now - Date.parse(policy.issuedAt) > holdCacheMaxAge) return false;
+  if (policy.until !== undefined && now > Date.parse(policy.until)) return false;
+  return true;
 }
 
 /**
@@ -48,7 +68,12 @@ export function startCadence(params: CadenceParams): void {
     }
     inFlight = true;
     try {
-      params.checkForUpdates();
+      // The vendor update-feed check piggybacks on this same cadence but
+      // MUST NOT run while held -- a Hold gates the check itself, not just
+      // the download/apply actions downstream of it.
+      if (!policyHoldsTheVendorCheck(params.getPolicy(), params.holdCacheMaxAge, Date.now())) {
+        params.checkForUpdates();
+      }
       const env = collectEnvironment();
       // Snapshotting before the request goes out, and clearing exactly this
       // snapshot on ACK, is what keeps a fact recorded mid-flight from being

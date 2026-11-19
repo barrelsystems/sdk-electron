@@ -12,6 +12,20 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./ipc": {
+      "types": "./dist/ipc.d.ts",
+      "default": "./dist/ipc.js"
+    },
+    "./preload": {
+      "require": {
+        "types": "./dist/preload.d.cts",
+        "default": "./dist/preload.cjs"
+      },
+      "import": {
+        "types": "./dist/preload.d.ts",
+        "default": "./dist/preload.js"
+      }
     }
   },
   "scripts": {
@@ -26,6 +40,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "electron": "^42.11.16",
+    "electron-squirrel-startup": "^1.0.1",
     "electron-updater": "^6.8.11",
     "oxfmt": "0.73.0",
     "oxlint": "1.88.0",
@@ -35,9 +50,13 @@
   },
   "peerDependencies": {
     "electron": ">=30.0.0",
+    "electron-squirrel-startup": ">=1.0.0",
     "electron-updater": ">=6.0.0"
   },
   "peerDependenciesMeta": {
+    "electron-squirrel-startup": {
+      "optional": true
+    },
     "electron-updater": {
       "optional": true
     }
@@ -45,7 +64,7 @@
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "pnpm@10.13.1",
+  "packageManager": "pnpm@10.13.1+sha512.37ebf1a5c7a30d5fabe0c5df44ee8da4c965ca0c5af3dbab28c3a1681b70a256218d05c81c9c0dcf767ef6b8551eb5b960042b9ed4300c59242336377e01cfad",
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",

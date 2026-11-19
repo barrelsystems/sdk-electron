@@ -5,9 +5,17 @@ import {
   type ElectronUpdaterLike,
 } from "./electronUpdaterAdapter.js";
 
+const mockApp = vi.hoisted(() => ({ isPackaged: false }));
+vi.mock("electron", () => ({ app: mockApp }));
+
 function createFakeUpdater(): ElectronUpdaterLike & EventEmitter {
   const emitter = new EventEmitter() as ElectronUpdaterLike & EventEmitter;
   emitter.checkForUpdates = vi.fn().mockResolvedValue(null);
+  emitter.downloadUpdate = vi.fn().mockResolvedValue(null);
+  emitter.quitAndInstall = vi.fn();
+  emitter.setFeedURL = vi.fn();
+  emitter.autoDownload = true;
+  emitter.forceDevUpdateConfig = false;
   return emitter;
 }
 
@@ -39,6 +47,77 @@ describe("createElectronUpdaterAdapter", () => {
     updater.emit("update-not-available");
 
     expect(adapter.getAdapterState()).toEqual({ type: "idle" });
+  });
+
+  it("passes through a plain-string releaseNotes and carries it into downloading/downloaded", () => {
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+
+    updater.emit("update-available", { releaseNotes: "Fixed a crash on launch." });
+    expect(adapter.getAdapterState()).toEqual({
+      type: "available",
+      releaseNotes: "Fixed a crash on launch.",
+    });
+
+    updater.emit("download-progress", { percent: 10 });
+    expect(adapter.getAdapterState()).toEqual({
+      type: "downloading",
+      progress: 10,
+      releaseNotes: "Fixed a crash on launch.",
+    });
+
+    updater.emit("update-downloaded");
+    expect(adapter.getAdapterState()).toEqual({
+      type: "downloaded",
+      releaseNotes: "Fixed a crash on launch.",
+    });
+  });
+
+  it("joins a per-version releaseNotes array into one string", () => {
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+
+    updater.emit("update-available", {
+      releaseNotes: [
+        { version: "1.2.0", note: "Added dark mode." },
+        { version: "1.1.0", note: "Fixed a crash on launch." },
+      ],
+    });
+
+    expect(adapter.getAdapterState()).toEqual({
+      type: "available",
+      releaseNotes: "Added dark mode.\n\nFixed a crash on launch.",
+    });
+  });
+
+  it("never fabricates releaseNotes when electron-updater gives none", () => {
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+
+    updater.emit("update-available");
+    expect(adapter.getAdapterState()).toEqual({ type: "available" });
+    expect("releaseNotes" in adapter.getAdapterState()).toBe(false);
+
+    updater.emit("update-available", { releaseNotes: null });
+    expect(adapter.getAdapterState()).toEqual({ type: "available" });
+  });
+
+  it("clears releaseNotes once the update cycle ends (cancelled, idle, or error)", () => {
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+
+    updater.emit("update-available", { releaseNotes: "Stale notes." });
+    updater.emit("update-cancelled");
+    expect(adapter.getAdapterState()).toEqual({ type: "update-cancelled" });
+
+    updater.emit("update-available", { releaseNotes: "Stale notes." });
+    updater.emit("update-not-available");
+    expect(adapter.getAdapterState()).toEqual({ type: "idle" });
+
+    updater.emit("update-available", { releaseNotes: "Stale notes." });
+    updater.emit("error", new Error("boom"));
+    updater.emit("checking-for-update");
+    expect(adapter.getAdapterState()).toEqual({ type: "checking" });
   });
 
   it("reports update-cancelled as its own distinct state, never idle", () => {
@@ -129,5 +208,80 @@ describe("createElectronUpdaterAdapter", () => {
     // An unexpected shape (no code/message) must not throw out of the emitter.
     expect(() => updater.emit("download-progress", null as never)).not.toThrow();
     expect(adapter.getAdapterState()).toEqual({ type: "idle" });
+  });
+
+  it("forces electron-updater's own autoDownload off -- host-control owns download timing", () => {
+    const updater = createFakeUpdater();
+    createElectronUpdaterAdapter(updater);
+
+    expect(updater.autoDownload).toBe(false);
+  });
+
+  it("downloadUpdate() delegates to the underlying updater and swallows its rejection", async () => {
+    const updater = createFakeUpdater();
+    updater.downloadUpdate = vi.fn().mockRejectedValue(new Error("boom"));
+    const adapter = createElectronUpdaterAdapter(updater);
+
+    expect(() => adapter.downloadUpdate()).not.toThrow();
+    await vi.waitFor(() => expect(updater.downloadUpdate).toHaveBeenCalledTimes(1));
+  });
+
+  it("quitAndInstall() delegates to the underlying updater", () => {
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+
+    adapter.quitAndInstall();
+
+    expect(updater.quitAndInstall).toHaveBeenCalledTimes(1);
+  });
+
+  it("setFeedURL() configures the generic provider and forces dev config when unpackaged", () => {
+    mockApp.isPackaged = false;
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+
+    adapter.setFeedURL("https://updates.example.com/latest.json");
+
+    expect(updater.setFeedURL).toHaveBeenCalledWith({
+      provider: "generic",
+      url: "https://updates.example.com/latest.json",
+    });
+    expect(updater.forceDevUpdateConfig).toBe(true);
+  });
+
+  it("setFeedURL() never forces dev config on a packaged build", () => {
+    mockApp.isPackaged = true;
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+
+    adapter.setFeedURL("https://updates.example.com/latest.json");
+
+    expect(updater.forceDevUpdateConfig).toBe(false);
+  });
+
+  it("onStateChange notifies its listener of every transition", () => {
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+    const states: unknown[] = [];
+    adapter.onStateChange((state) => states.push(state));
+
+    updater.emit("checking-for-update");
+    updater.emit("update-available");
+
+    expect(states).toEqual([{ type: "checking" }, { type: "available" }]);
+  });
+
+  it("onStateChange supports more than one listener", () => {
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+    const first: unknown[] = [];
+    const second: unknown[] = [];
+    adapter.onStateChange((state) => first.push(state));
+    adapter.onStateChange((state) => second.push(state));
+
+    updater.emit("checking-for-update");
+
+    expect(first).toEqual([{ type: "checking" }]);
+    expect(second).toEqual([{ type: "checking" }]);
   });
 });

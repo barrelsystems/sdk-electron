@@ -42,7 +42,7 @@ describe("sendCheckIn", () => {
     expect(typeof body.eventId).toBe("string");
   });
 
-  it("sends the caller-supplied bufferedFacts snapshot verbatim", async () => {
+  it("sends an adapterState fact verbatim", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -60,6 +60,45 @@ describe("sendCheckIn", () => {
     const call = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(call[1].body as string);
     expect(body.bufferedFacts).toEqual(bufferedFacts);
+  });
+
+  it("flattens an updateError fact's failure fields onto the wire shape the backend expects", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const bufferedFacts: CheckInParams["bufferedFacts"] = [
+      {
+        kind: "updateError",
+        failure: {
+          phase: "download",
+          failureMode: "manifest-unreachable",
+          title: "Update server unreachable",
+          platform: "electron-updater",
+          platformCode: "ENOTFOUND",
+        },
+        firstObservedAt: "2026-01-01T00:00:00.000Z",
+        lastObservedAt: "2026-01-01T00:00:00.000Z",
+        occurrenceCount: 1,
+      },
+    ];
+
+    await sendCheckIn({ ...baseParams, bufferedFacts });
+    const call = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(call[1].body as string);
+    // The backend's schema has no `failure`/`title`/`platform` fields --
+    // nesting them (the internal, on-disk shape) made every check-in after
+    // a buffered update error fail its own schema validation.
+    expect(body.bufferedFacts).toEqual([
+      {
+        kind: "updateError",
+        phase: "download",
+        failureMode: "manifest-unreachable",
+        platformCode: "ENOTFOUND",
+        firstObservedAt: "2026-01-01T00:00:00.000Z",
+        lastObservedAt: "2026-01-01T00:00:00.000Z",
+        occurrenceCount: 1,
+      },
+    ]);
   });
 
   it("fails open (undefined) on a non-2xx response, without retrying", async () => {

@@ -1,5 +1,5 @@
 import { createPublicKey, verify } from "node:crypto";
-import type { CheckInResponse, Policy } from "./types.js";
+import type { CheckInResponse, Policy } from "../types.js";
 
 /**
  * Verifies the raw `policy` byte string's Ed25519 signature via native
