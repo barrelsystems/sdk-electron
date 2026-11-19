@@ -1,9 +1,10 @@
-import { app } from "electron";
+import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { createUpdaterAdapter } from "./adapters/createUpdaterAdapter.js";
 import type { UpdaterAdapter } from "./adapters/electronUpdaterAdapter.js";
-import { startCadence } from "./cadence.js";
 import { BarrelConfigError } from "./errors.js";
+import type { HostControl } from "./hostControl.js";
+import { startHostControl } from "./hostControl.js";
 import { DEFAULT_BASE_URL, PUBLIC_ED25519_KEY_PEM } from "./keys.js";
 import {
   clearBufferedFacts,
@@ -16,18 +17,26 @@ import {
   getOrCreateTrustedKey,
   getTrustedKey,
 } from "./persistence/keyRotation.js";
-import { verifyAndParsePolicy } from "./policy.js";
-import type { InitConfig, Policy, UpdateFailure } from "./types.js";
-import { DEFAULT_INTERVAL_MS } from "./cadence.js";
+import { verifyAndParsePolicy } from "./protocol/policy.js";
+import { quitIfSquirrelStartupEvent } from "./squirrelStartup.js";
+import type { AdapterState, InitConfig, Policy, UpdateFailure } from "./types.js";
+import {
+  DEFAULT_HOLD_CACHE_MAX_AGE_MS,
+  DEFAULT_INTERVAL_MS,
+  MAX_HOLD_CACHE_MAX_AGE_MS,
+  startCadence,
+} from "./cadence.js";
 
 let initialized = false;
 let lastKnownPolicy: Policy | undefined;
 let debugLog: ((message: string) => void) | undefined;
 let updaterAdapter: UpdaterAdapter | undefined;
+let hostControl: HostControl | undefined;
+let pendingStateChangeListeners: ((state: AdapterState) => void)[] = [];
 
 /**
  * The only required call. Silent until this runs, throws synchronously only
- * for invalid config, and is a silent no-op on a second call — every later
+ * for invalid config, and is a silent no-op on a second call -- every later
  * failure fails open instead of throwing.
  */
 export function init(config: InitConfig): void {
@@ -36,12 +45,20 @@ export function init(config: InitConfig): void {
     return;
   }
 
+  // init() itself must run this early -- before any window is created --
+  // since that's the only way a Squirrel lifecycle event quits in time.
+  if (quitIfSquirrelStartupEvent(app, BrowserWindow)) return;
+
   if (process.type !== "browser") {
     throw new BarrelConfigError("Barrel: init() must run in Electron's main process.");
   }
 
   if (config.credential.trim().length === 0) {
     throw new BarrelConfigError("Barrel: init() requires a non-empty `credential`.");
+  }
+
+  if (config.holdCacheMaxAge !== undefined && config.holdCacheMaxAge > MAX_HOLD_CACHE_MAX_AGE_MS) {
+    throw new BarrelConfigError("Barrel: `holdCacheMaxAge` must not exceed 7 days.");
   }
 
   initialized = true;
@@ -52,6 +69,7 @@ export function init(config: InitConfig): void {
   const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
   const checkInIntervalMs = config.checkInIntervalMs ?? DEFAULT_INTERVAL_MS;
   const attributes = config.attributes ?? {};
+  const autoDownload = config.autoDownload ?? true;
   const installationIdPath = join(app.getPath("userData"), "barrel-installation.json");
   const bufferedFactsPath = join(app.getPath("userData"), "barrel-buffered-facts.json");
   const trustedKeyPath = join(app.getPath("userData"), "barrel-trusted-key.json");
@@ -63,6 +81,18 @@ export function init(config: InitConfig): void {
     getOrCreateTrustedKey(trustedKeyPath, PUBLIC_ED25519_KEY_PEM),
   ]).then(([installationId, adapter]) => {
     updaterAdapter = adapter;
+    if (config.updateFeedURL) adapter.setFeedURL(config.updateFeedURL);
+    for (const listener of pendingStateChangeListeners) adapter.onStateChange(listener);
+    pendingStateChangeListeners = [];
+    hostControl = startHostControl({
+      baseUrl,
+      credential: config.credential,
+      installationId,
+      autoDownload,
+      adapter,
+      getTrustedKeyPem: () => getTrustedKey() ?? PUBLIC_ED25519_KEY_PEM,
+      log: debugLog,
+    });
     startCadence({
       baseUrl,
       credential: config.credential,
@@ -75,6 +105,8 @@ export function init(config: InitConfig): void {
       getBufferedFacts,
       clearBufferedFacts,
       checkForUpdates: () => adapter.checkForUpdates(),
+      getPolicy: () => lastKnownPolicy,
+      holdCacheMaxAge: config.holdCacheMaxAge ?? DEFAULT_HOLD_CACHE_MAX_AGE_MS,
       onPolicyResponse: (response) => {
         if (!response) return; // fail open — keep the last-known Policy
         const parsed = verifyAndParsePolicy(response, getTrustedKey() ?? PUBLIC_ED25519_KEY_PEM);
@@ -94,6 +126,43 @@ export function getPolicy(): Policy | undefined {
 /** Synchronous getter. `undefined` if nothing has failed this session. */
 export function getLastUpdateError(): UpdateFailure | undefined {
   return updaterAdapter?.getLastUpdateError();
+}
+
+/** Synchronous getter. `undefined` before `init()` has resolved its async setup. */
+export function getAdapterState(): AdapterState | undefined {
+  return updaterAdapter?.getAdapterState();
+}
+
+/**
+ * Fires on every local adapter-state transition, in addition to -- never
+ * instead of -- `getAdapterState()`'s own polling. Register once, at
+ * startup; listeners are never removed.
+ */
+export function onStateChange(listener: (state: AdapterState) => void): void {
+  if (updaterAdapter) {
+    updaterAdapter.onStateChange(listener);
+  } else {
+    // Queued until init()'s async setup creates the adapter.
+    pendingStateChangeListeners.push(listener);
+  }
+}
+
+/**
+ * Triggers a download when `autoDownload: false` leaves nothing else that
+ * ever would. A no-op, not a throw, before `init()` has resolved or before
+ * an update is actually `available`.
+ */
+export function downloadUpdate(): void {
+  hostControl?.downloadUpdate();
+}
+
+/**
+ * Host-triggered earlier apply, ahead of the natural-quit default. A no-op,
+ * not a throw, before `init()` has resolved or before anything has actually
+ * downloaded -- there's nothing yet to apply.
+ */
+export function applyUpdate(): void {
+  hostControl?.applyUpdate();
 }
 
 export type {

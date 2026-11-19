@@ -28,11 +28,9 @@ describe("resolveFailureTitle", () => {
       "config-invalid",
       "cors-misconfigured",
       "platform-unsupported",
-      "sdk-misuse",
       "translocation-blocked",
       "webkit-terminated",
       "release-notes-failed",
-      "update-check-declined",
       "resume-appcast-failed",
       "unknown",
     ];

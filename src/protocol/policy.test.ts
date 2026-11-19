@@ -1,7 +1,7 @@
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { verifyAndParsePolicy } from "./policy.js";
-import type { CheckInResponse } from "./types.js";
+import type { CheckInResponse } from "../types.js";
 
 function signPolicy(policy: string, privateKey: KeyObject): string {
   return sign(null, Buffer.from(policy, "utf8"), privateKey).toString("base64");

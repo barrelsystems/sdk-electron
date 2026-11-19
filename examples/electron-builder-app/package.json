@@ -1,0 +1,43 @@
+{
+  "name": "electron-builder-app",
+  "productName": "Barrel Electron Builder Example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Example @barrel-kit/sdk-electron integration, packaged with electron-builder.",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "lint": "oxlint && oxfmt --check",
+    "lint:fix": "oxlint --fix && oxfmt --write"
+  },
+  "build": {
+    "appId": "codes.barrel.examples.electron-builder-app",
+    "productName": "Barrel Electron Builder Example",
+    "directories": {
+      "output": "out"
+    },
+    "files": [
+      "main.js",
+      "preload.cjs",
+      "renderer.js",
+      "index.html",
+      "index.css"
+    ],
+    "mac": {
+      "target": "zip"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.3.4",
+    "electron-builder": "^26.18.0",
+    "oxfmt": "^0.41.0",
+    "oxlint": "^1.94.0"
+  },
+  "dependencies": {
+    "@barrel-kit/sdk-electron": "file:../../barrel-kit-sdk-electron-0.0.1.tgz",
+    "electron-squirrel-startup": "^1.0.1",
+    "electron-updater": "^6.8.11"
+  }
+}

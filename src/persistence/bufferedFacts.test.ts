@@ -49,6 +49,18 @@ describe("bufferedFacts", () => {
     expect(facts[0]).toMatchObject({ occurrenceCount: 3 });
   });
 
+  it("keeps two available facts distinct when their release notes differ, instead of collapsing them", async () => {
+    const { configureBufferedFacts, getBufferedFacts, recordAdapterStateFact } =
+      await import("./bufferedFacts.js");
+    await configureBufferedFacts(join(dir, "facts.json"));
+
+    recordAdapterStateFact({ type: "available", releaseNotes: "Fixed a crash on launch." });
+    recordAdapterStateFact({ type: "available", releaseNotes: "Added dark mode." });
+
+    const facts = getBufferedFacts();
+    expect(facts).toHaveLength(2);
+  });
+
   it("merges a repeated updateError by failureMode + platformCode, bumping occurrenceCount", async () => {
     const { configureBufferedFacts, getBufferedFacts, recordUpdateErrorFact } =
       await import("./bufferedFacts.js");
