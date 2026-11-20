@@ -22,10 +22,6 @@ signature verification) fails open: keep the prior state, never throw, never
 retry in a loop. A thrown error is reserved for synchronous, caller-fixable
 misconfiguration (e.g. a blank credential passed to `init()`).
 
-## Tooling
-
-tsdown (build), vitest (test), oxlint/oxfmt (lint/format).
-
 ## Commit policy
 
 Ask for the user's explicit go-ahead on this specific diff before every
