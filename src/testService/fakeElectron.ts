@@ -1,9 +1,9 @@
 import { EventEmitter } from "node:events";
 import type { AutoUpdater } from "electron";
 
-// The minimal fake `electron` module's own unit tests already use via
-// `vi.mock("electron", () => ({ app: mockApp }))` -- `app.isPackaged` is the
-// only member the adapter under test actually reads.
+// A separate, minimal fake from the unit tests' own `mockApp` (mocked via
+// `vi.mock("electron", () => ({ app: mockApp }))`) -- `app.isPackaged` is
+// the only member the adapter under test actually reads.
 export const app = { isPackaged: false };
 
 /** A real `EventEmitter` patched with the non-event methods a fake

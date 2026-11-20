@@ -6,10 +6,12 @@ import { BarrelConfigError } from "./errors.js";
 import type { HostControl } from "./hostControl.js";
 import { startHostControl } from "./hostControl.js";
 import { DEFAULT_BASE_URL, PUBLIC_ED25519_KEY_PEM } from "./keys.js";
+import { resolveFailureTitle } from "./errorTaxonomy.js";
 import {
   clearBufferedFacts,
   configureBufferedFacts,
   getBufferedFacts,
+  getLastBufferedUpdateError,
 } from "./persistence/bufferedFacts.js";
 import { getOrCreateInstallationId } from "./persistence/installationId.js";
 import {
@@ -123,9 +125,20 @@ export function getPolicy(): Policy | undefined {
   return lastKnownPolicy;
 }
 
-/** Synchronous getter. `undefined` if nothing has failed this session. */
+/**
+ * Synchronous getter. Cached from the adapter's own last-observed failure,
+ * or -- if the process crashed or restarted before the next check-in flushed
+ * it -- the most recent buffered `updateError` fact. `undefined` only if
+ * neither source has one.
+ */
 export function getLastUpdateError(): UpdateFailure | undefined {
-  return updaterAdapter?.getLastUpdateError();
+  const adapterError = updaterAdapter?.getLastUpdateError();
+  if (adapterError) return adapterError;
+
+  const buffered = getLastBufferedUpdateError();
+  if (!buffered) return undefined;
+
+  return { ...buffered, title: resolveFailureTitle(buffered.failureMode) };
 }
 
 /** Synchronous getter. `undefined` before `init()` has resolved its async setup. */

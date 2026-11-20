@@ -1,3 +1,4 @@
+import { recordUpdateErrorFact } from "./persistence/bufferedFacts.js";
 import type { AdapterState, UpdateFailure, UpdateFailureMode } from "./types.js";
 
 type Phase = "check" | "verify" | "download" | "extract" | "install" | "config" | "unknown";
@@ -66,6 +67,23 @@ export function buildFailureState(
     platformCode,
   };
   return { failure, state };
+}
+
+/**
+ * The tail every adapter's own `'error'` handler needs: classify the
+ * platform error and buffer it as a fact. Callers still own `lastError` and
+ * `setState` themselves -- those close over adapter-local state this module
+ * never sees.
+ */
+export function classifyAndRecordFailure(
+  platform: UpdateFailure["platform"],
+  failureMode: UpdateFailureMode,
+  phase: Phase,
+  platformCode: string,
+): { failure: UpdateFailure; state: Extract<AdapterState, { type: "failed" }> } {
+  const built = buildFailureState(platform, failureMode, phase, platformCode);
+  recordUpdateErrorFact(built.failure);
+  return built;
 }
 
 export type { Phase };

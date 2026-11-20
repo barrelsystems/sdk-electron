@@ -102,6 +102,29 @@ describe("init", () => {
     expect(getPolicy()).toBeUndefined();
   });
 
+  it("getLastUpdateError() falls back to the most recent buffered updateError fact when the adapter has none in memory", async () => {
+    const { configureBufferedFacts, recordUpdateErrorFact } =
+      await import("./persistence/bufferedFacts.js");
+    await configureBufferedFacts(join(userDataDir, "barrel-buffered-facts.json"));
+    recordUpdateErrorFact({
+      phase: "download",
+      failureMode: "download-transport-failed",
+      title: "ignored -- never read back from here",
+      platform: "electron-updater",
+      platformCode: "ENOTFOUND",
+    });
+
+    const { getLastUpdateError } = await import("./index.js");
+
+    expect(getLastUpdateError()).toEqual({
+      phase: "download",
+      failureMode: "download-transport-failed",
+      title: "The update download failed at the network layer.",
+      platform: "electron-updater",
+      platformCode: "ENOTFOUND",
+    });
+  });
+
   it("applyUpdate() is a safe no-op before init() has resolved", async () => {
     const { applyUpdate } = await import("./index.js");
     expect(() => applyUpdate()).not.toThrow();

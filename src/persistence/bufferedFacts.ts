@@ -15,9 +15,14 @@ export interface FactTimestamps {
   occurrenceCount: number;
 }
 
+/** `title` is a pure, derived function of `failureMode` -- MUST NEVER be
+ * persisted or transmitted, so this variant stores everything else instead
+ * of the whole `UpdateFailure`. */
+export type PersistedUpdateFailure = Omit<UpdateFailure, "title">;
+
 export type BufferedFact =
   | ({ kind: "adapterState"; state: AdapterState } & FactTimestamps)
-  | ({ kind: "updateError"; failure: UpdateFailure } & FactTimestamps);
+  | ({ kind: "updateError"; failure: PersistedUpdateFailure } & FactTimestamps);
 
 let buffer: BufferedFact[] = [];
 let filePath: string | undefined;
@@ -67,16 +72,34 @@ export function recordAdapterStateFact(state: AdapterState): void {
   });
 }
 
-/** Appends an observed update error, or merges it into a matching existing entry. */
+/** Appends an observed update error, or merges it into a matching existing entry.
+ * Strips `title` before storing -- it's never persisted, only derived at read time. */
 export function recordUpdateErrorFact(failure: UpdateFailure): void {
+  const { title: _title, ...persisted } = failure;
   const now = new Date().toISOString();
   upsert({
     kind: "updateError",
-    failure,
+    failure: persisted,
     firstObservedAt: now,
     lastObservedAt: now,
     occurrenceCount: 1,
   });
+}
+
+/**
+ * The most recently observed buffered `updateError` fact, if any -- the
+ * crash-recovery fallback `getLastUpdateError()` uses when the adapter has
+ * no in-memory failure of its own.
+ */
+export function getLastBufferedUpdateError(): PersistedUpdateFailure | undefined {
+  let latest: (BufferedFact & { kind: "updateError" }) | undefined;
+
+  for (const fact of buffer) {
+    if (fact.kind !== "updateError") continue;
+    if (latest === undefined || fact.lastObservedAt >= latest.lastObservedAt) latest = fact;
+  }
+
+  return latest?.failure;
 }
 
 interface FactClassification {
