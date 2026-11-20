@@ -33,18 +33,23 @@
     "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test-service": "node --import tsx --import ./src/testService/registerElectronMock.ts src/testService/server.ts",
     "lint": "oxlint --disable-nested-config --max-warnings=0 .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check ."
   },
   "devDependencies": {
+    "@barrel-kit/sdk-conformance-harness": "github:barrelsystems/sdk-conformance-harness#dist",
+    "@effect/platform-node": "^4.1.4",
     "@types/node": "^24.0.0",
+    "effect": "^4.1.4",
     "electron": "^42.11.16",
     "electron-squirrel-startup": "^1.0.1",
     "electron-updater": "^6.8.11",
     "oxfmt": "0.73.0",
     "oxlint": "1.88.0",
     "tsdown": "^0.9.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^5.1.0"
   },
