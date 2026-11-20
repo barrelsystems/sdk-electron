@@ -10,7 +10,6 @@ import type { ElectronUpdaterLike, UpdaterAdapter } from "../adapters/electronUp
 import { createUpdaterAdapter } from "../adapters/createUpdaterAdapter.js";
 import { autoUpdater as fakeBuiltinAutoUpdater, createFakeEmitter } from "./fakeElectron.js";
 import { computeJitterFraction } from "../jitter.js";
-import { getInternalDefectCounts } from "../internalDefects.js";
 import { sendCheckIn } from "../protocol/checkIn.js";
 import { checkPreAction } from "../protocol/preActionCheck.js";
 import { verifyAndParsePolicy } from "../protocol/policy.js";
@@ -126,8 +125,6 @@ export const RoutesLayer = Layer.unwrap(
                 return { result: instance.adapter.getAdapterState() };
               case "getLastUpdateError":
                 return { result: instance.adapter.getLastUpdateError() ?? null };
-              case "getInternalDefectCount":
-                return { result: getInternalDefectCounts().get(payload.cause) ?? 0 };
               case "checkNow": {
                 // Exercises the check-in call itself, same as a scheduled
                 // tick -- never drives `instance.adapter`'s own lifecycle
