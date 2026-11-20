@@ -1,8 +1,10 @@
 import type { AutoUpdater } from "electron";
-import { buildFailureState } from "../errorTaxonomy.js";
+import { classifyAndRecordFailure } from "../errorTaxonomy.js";
+import type { Phase } from "../errorTaxonomy.js";
 import { guardAdapterCallback } from "../internalDefects.js";
-import { recordAdapterStateFact, recordUpdateErrorFact } from "../persistence/bufferedFacts.js";
-import type { AdapterState, UpdateFailure } from "../types.js";
+import { recordAdapterStateFact } from "../persistence/bufferedFacts.js";
+import type { AdapterState, UpdateFailure, UpdateFailureMode } from "../types.js";
+import type { BuiltinOperation } from "./builtinUpdaterErrorMap.js";
 import { mapBuiltinUpdaterError } from "./builtinUpdaterErrorMap.js";
 import type { UpdaterAdapter } from "./electronUpdaterAdapter.js";
 import { createListenerSet } from "./listenerSet.js";
@@ -15,12 +17,22 @@ import { createListenerSet } from "./listenerSet.js";
 export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapter {
   let state: AdapterState = { type: "idle" };
   let lastError: UpdateFailure | undefined;
+  // Set right before `quitAndInstall()` calls into the platform updater, so
+  // an 'error' that fires afterward is classified as a relaunch failure, not
+  // a check failure -- cleared once that error is handled either way.
+  let awaitingRelaunch = false;
   const stateChangeListeners = createListenerSet<AdapterState>();
 
   function setState(newState: AdapterState): void {
     state = newState;
     recordAdapterStateFact(newState);
     stateChangeListeners.notify(newState);
+  }
+
+  function recordFailure(failureMode: UpdateFailureMode, phase: Phase, platformCode: string): void {
+    const built = classifyAndRecordFailure("electron-builtin", failureMode, phase, platformCode);
+    lastError = built.failure;
+    setState(built.state);
   }
 
   updater.on("checking-for-update", () => {
@@ -55,25 +67,25 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
 
   updater.on("error", (error) => {
     guardAdapterCallback("electron-builtin:error", () => {
-      const { failureMode, phase } = mapBuiltinUpdaterError("checking");
-      const built = buildFailureState("electron-builtin", failureMode, phase, error.message);
-      lastError = built.failure;
-      setState(built.state);
-      recordUpdateErrorFact(built.failure);
+      const operation: BuiltinOperation = awaitingRelaunch ? "relaunching" : "checking";
+      awaitingRelaunch = false;
+      const { failureMode, phase } = mapBuiltinUpdaterError(operation);
+      recordFailure(failureMode, phase, error.message);
     });
   });
 
   return {
     checkForUpdates() {
+      // Bounds `awaitingRelaunch`'s lifetime to "until the next check
+      // cycle," not just "until the next error" -- a relaunch that never
+      // errors must not mislabel some unrelated, later check failure.
+      awaitingRelaunch = false;
       try {
         updater.checkForUpdates();
       } catch (error) {
         const { failureMode, phase } = mapBuiltinUpdaterError("configuring");
         const platformCode = error instanceof Error ? error.message : String(error);
-        const built = buildFailureState("electron-builtin", failureMode, phase, platformCode);
-        lastError = built.failure;
-        setState(built.state);
-        recordUpdateErrorFact(built.failure);
+        recordFailure(failureMode, phase, platformCode);
       }
     },
     // No lever exists here: `update-available` already means Squirrel.Mac
@@ -81,6 +93,7 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
     // something -- there's nothing left to trigger.
     downloadUpdate() {},
     quitAndInstall() {
+      awaitingRelaunch = true;
       updater.quitAndInstall();
     },
     setFeedURL(url) {

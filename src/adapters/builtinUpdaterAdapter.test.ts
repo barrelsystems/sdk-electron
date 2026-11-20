@@ -189,5 +189,44 @@ describe("createBuiltinUpdaterAdapter", () => {
         platformCode: "Update URL is not set",
       });
     });
+
+    it("an error after quitAndInstall() classifies as a relaunch failure, not a check failure", () => {
+      const updater = createFakeUpdater();
+      const adapter = createBuiltinUpdaterAdapter(updater);
+
+      adapter.quitAndInstall();
+      updater.emit("error", new Error("relaunch failed"));
+
+      expect(adapter.getLastUpdateError()).toMatchObject({
+        failureMode: "install-relaunch-failed",
+        phase: "install",
+      });
+    });
+
+    it("an error before quitAndInstall() is ever called still classifies as checking", () => {
+      const updater = createFakeUpdater();
+      const adapter = createBuiltinUpdaterAdapter(updater);
+
+      updater.emit("error", new Error("check failed"));
+
+      expect(adapter.getLastUpdateError()).toMatchObject({
+        failureMode: "unknown",
+        phase: "check",
+      });
+    });
+
+    it("a second error after a relaunch failure classifies as checking again, not another relaunch", () => {
+      const updater = createFakeUpdater();
+      const adapter = createBuiltinUpdaterAdapter(updater);
+
+      adapter.quitAndInstall();
+      updater.emit("error", new Error("relaunch failed"));
+      updater.emit("error", new Error("check failed"));
+
+      expect(adapter.getLastUpdateError()).toMatchObject({
+        failureMode: "unknown",
+        phase: "check",
+      });
+    });
   });
 });

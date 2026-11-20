@@ -1,7 +1,7 @@
 import { app } from "electron";
-import { buildFailureState } from "../errorTaxonomy.js";
+import { classifyAndRecordFailure } from "../errorTaxonomy.js";
 import { guardAdapterCallback } from "../internalDefects.js";
-import { recordAdapterStateFact, recordUpdateErrorFact } from "../persistence/bufferedFacts.js";
+import { recordAdapterStateFact } from "../persistence/bufferedFacts.js";
 import type { AdapterState, UpdateFailure } from "../types.js";
 import { mapElectronUpdaterError } from "./electronUpdaterErrorMap.js";
 import { createListenerSet } from "./listenerSet.js";
@@ -144,12 +144,11 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
     guardAdapterCallback("electron-updater:error", () => {
       const { failureMode, phase } = mapElectronUpdaterError(error, currentPhase);
       const platformCode = error.code ?? error.message;
-      const built = buildFailureState("electron-updater", failureMode, phase, platformCode);
+      const built = classifyAndRecordFailure("electron-updater", failureMode, phase, platformCode);
       lastError = built.failure;
       setState(built.state);
       currentPhase = "idle";
       currentReleaseNotes = undefined;
-      recordUpdateErrorFact(built.failure);
     });
   });
 

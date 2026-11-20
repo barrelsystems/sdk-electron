@@ -72,7 +72,6 @@ describe("sendCheckIn", () => {
         failure: {
           phase: "download",
           failureMode: "manifest-unreachable",
-          title: "Update server unreachable",
           platform: "electron-updater",
           platformCode: "ENOTFOUND",
         },
@@ -85,7 +84,7 @@ describe("sendCheckIn", () => {
     await sendCheckIn({ ...baseParams, bufferedFacts });
     const call = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(call[1].body as string);
-    // The backend's schema has no `failure`/`title`/`platform` fields --
+    // The backend's schema has no `failure`/`platform`/`title` fields --
     // nesting them (the internal, on-disk shape) made every check-in after
     // a buffered update error fail its own schema validation.
     expect(body.bufferedFacts).toEqual([

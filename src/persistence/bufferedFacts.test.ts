@@ -74,6 +74,42 @@ describe("bufferedFacts", () => {
     expect(facts[0]).toMatchObject({ kind: "updateError", occurrenceCount: 2 });
   });
 
+  it("never persists title -- it's a derived function of failureMode, resolved only at read time", async () => {
+    const { configureBufferedFacts, getBufferedFacts, recordUpdateErrorFact } =
+      await import("./bufferedFacts.js");
+    await configureBufferedFacts(join(dir, "facts.json"));
+
+    recordUpdateErrorFact(FAILURE);
+
+    const [fact] = getBufferedFacts();
+    if (fact?.kind !== "updateError") throw new Error("expected an updateError fact");
+    expect("title" in fact.failure).toBe(false);
+  });
+
+  it("getLastBufferedUpdateError returns the most recently observed updateError fact, title re-derived", async () => {
+    const { configureBufferedFacts, getLastBufferedUpdateError, recordUpdateErrorFact } =
+      await import("./bufferedFacts.js");
+    await configureBufferedFacts(join(dir, "facts.json"));
+
+    recordUpdateErrorFact(FAILURE);
+    recordUpdateErrorFact({ ...FAILURE, platformCode: "ECONNRESET" });
+
+    const buffered = getLastBufferedUpdateError();
+    expect(buffered).toMatchObject({
+      failureMode: "download-transport-failed",
+      platformCode: "ECONNRESET",
+    });
+    expect(buffered && "title" in buffered).toBe(false);
+  });
+
+  it("getLastBufferedUpdateError returns undefined when nothing has been buffered", async () => {
+    const { configureBufferedFacts, getLastBufferedUpdateError } =
+      await import("./bufferedFacts.js");
+    await configureBufferedFacts(join(dir, "facts.json"));
+
+    expect(getLastBufferedUpdateError()).toBeUndefined();
+  });
+
   it("keeps a sustained outage of repeated checking/failed pairs bounded, not 32 duplicates", async () => {
     const {
       configureBufferedFacts,
