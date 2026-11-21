@@ -3,6 +3,12 @@ import type { FactTimestamps } from "./persistence/bufferedFacts.js";
 
 export const PROTOCOL_VERSION = 1;
 
+export interface BackendConnection {
+  baseUrl: string;
+  credential: string;
+  installationId: string;
+}
+
 export interface InitConfig {
   credential: string;
   baseUrl?: string;

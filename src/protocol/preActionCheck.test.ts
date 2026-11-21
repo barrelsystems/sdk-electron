@@ -13,9 +13,11 @@ describe("checkPreAction", () => {
   });
 
   const baseParams = {
-    baseUrl: "https://ingest.example.com",
-    credential: "cred",
-    installationId: "11111111-1111-1111-1111-111111111111",
+    connection: {
+      baseUrl: "https://ingest.example.com",
+      credential: "cred",
+      installationId: "11111111-1111-1111-1111-111111111111",
+    },
     stage: "pre-download" as const,
     trustedKeyPem: "trusted-key-pem",
   };
@@ -32,7 +34,7 @@ describe("checkPreAction", () => {
     const body = JSON.parse(call[1].body as string);
     expect(body).toEqual({
       protocolVersion: 1,
-      installationId: baseParams.installationId,
+      installationId: baseParams.connection.installationId,
       stage: "pre-download",
     });
   });

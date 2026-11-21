@@ -86,19 +86,17 @@ export function init(config: InitConfig): void {
     if (config.updateFeedURL) adapter.setFeedURL(config.updateFeedURL);
     for (const listener of pendingStateChangeListeners) adapter.onStateChange(listener);
     pendingStateChangeListeners = [];
+    const connection = { baseUrl, credential: config.credential, installationId };
+
     hostControl = startHostControl({
-      baseUrl,
-      credential: config.credential,
-      installationId,
+      connection,
       autoDownload,
       adapter,
       getTrustedKeyPem: () => getTrustedKey() ?? PUBLIC_ED25519_KEY_PEM,
       log: debugLog,
     });
     startCadence({
-      baseUrl,
-      credential: config.credential,
-      installationId,
+      connection,
       checkInIntervalMs,
       sdkVersion: __SDK_VERSION__,
       attributes,
