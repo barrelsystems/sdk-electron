@@ -56,9 +56,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter();
 
     startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: true,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -74,9 +76,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter();
 
     startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: false,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -93,9 +97,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter();
 
     startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: true,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -112,9 +118,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter();
 
     startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: true,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -135,9 +143,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter();
 
     startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: true,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -155,9 +165,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter({ type: "idle" });
 
     const control = startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: true,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -174,9 +186,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter({ type: "downloaded" });
 
     const control = startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: true,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -192,9 +206,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter();
 
     const control = startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: true,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -222,9 +238,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter({ type: "idle" });
 
     const control = startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: false,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -241,9 +259,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter({ type: "available" });
 
     const control = startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: false,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",
@@ -259,9 +279,11 @@ describe("startHostControl", () => {
     const adapter = createFakeAdapter({ type: "available" });
 
     const control = startHostControl({
-      baseUrl: "https://ingest.example.com",
-      credential: "cred",
-      installationId: "id",
+      connection: {
+        baseUrl: "https://ingest.example.com",
+        credential: "cred",
+        installationId: "id",
+      },
       autoDownload: false,
       adapter,
       getTrustedKeyPem: () => "trusted-key-pem",

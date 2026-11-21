@@ -1,11 +1,10 @@
 import { app } from "electron";
 import type { UpdaterAdapter } from "./adapters/electronUpdaterAdapter.js";
 import { checkPreAction } from "./protocol/preActionCheck.js";
+import type { BackendConnection } from "./types.js";
 
 export interface HostControlParams {
-  baseUrl: string;
-  credential: string;
-  installationId: string;
+  connection: BackendConnection;
   autoDownload: boolean;
   adapter: UpdaterAdapter;
   getTrustedKeyPem: () => string;
@@ -28,9 +27,7 @@ export function startHostControl(params: HostControlParams): HostControl {
 
   function canProceed(stage: "pre-download" | "pre-apply"): Promise<boolean> {
     return checkPreAction({
-      baseUrl: params.baseUrl,
-      credential: params.credential,
-      installationId: params.installationId,
+      connection: params.connection,
       stage,
       trustedKeyPem: params.getTrustedKeyPem(),
       log: params.log,

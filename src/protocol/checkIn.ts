@@ -3,7 +3,13 @@ import { boundAttributes } from "../attributes.js";
 import type { BufferedFact } from "../persistence/bufferedFacts.js";
 import { postProtocolRequest } from "./postProtocolRequest.js";
 import { PROTOCOL_VERSION } from "../types.js";
-import type { AdapterState, CheckInRequest, CheckInResponse, WireBufferedFact } from "../types.js";
+import type {
+  AdapterState,
+  BackendConnection,
+  CheckInRequest,
+  CheckInResponse,
+  WireBufferedFact,
+} from "../types.js";
 
 const CHECK_IN_TIMEOUT_MS = 10_000;
 
@@ -23,9 +29,7 @@ function toWireBufferedFact(fact: BufferedFact): WireBufferedFact {
 }
 
 export interface CheckInParams {
-  baseUrl: string;
-  credential: string;
-  installationId: string;
+  connection: BackendConnection;
   sdkVersion: string;
   observedVersion: string;
   platform: string;
@@ -45,7 +49,7 @@ export interface CheckInParams {
 export async function sendCheckIn(params: CheckInParams): Promise<CheckInResponse | undefined> {
   const body: CheckInRequest = {
     protocolVersion: PROTOCOL_VERSION,
-    installationId: params.installationId,
+    installationId: params.connection.installationId,
     eventId: randomUUID(),
     checkedInAt: new Date().toISOString(),
     sdkVersion: params.sdkVersion,
@@ -59,8 +63,8 @@ export async function sendCheckIn(params: CheckInParams): Promise<CheckInRespons
   };
 
   const parsed = await postProtocolRequest({
-    url: `${params.baseUrl}/check-in`,
-    credential: params.credential,
+    url: `${params.connection.baseUrl}/check-in`,
+    credential: params.connection.credential,
     body,
     timeoutMs: CHECK_IN_TIMEOUT_MS,
     label: "check-in",

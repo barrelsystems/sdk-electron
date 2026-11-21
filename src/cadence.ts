@@ -3,7 +3,7 @@ import { sendCheckIn } from "./protocol/checkIn.js";
 import { collectEnvironment } from "./env.js";
 import { computeJitterFraction } from "./jitter.js";
 import type { BufferedFact } from "./persistence/bufferedFacts.js";
-import type { AdapterState, CheckInResponse, Policy } from "./types.js";
+import type { AdapterState, BackendConnection, CheckInResponse, Policy } from "./types.js";
 
 export const DEFAULT_INTERVAL_MS = 30 * 60 * 1000;
 export const MIN_INTERVAL_MS = 15 * 60 * 1000;
@@ -11,9 +11,7 @@ export const DEFAULT_HOLD_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const MAX_HOLD_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface CadenceParams {
-  baseUrl: string;
-  credential: string;
-  installationId: string;
+  connection: BackendConnection;
   checkInIntervalMs: number;
   sdkVersion: string;
   attributes: Record<string, string>;
@@ -56,7 +54,7 @@ export function startCadence(params: CadenceParams): void {
     );
   }
   const interval = Math.max(params.checkInIntervalMs, MIN_INTERVAL_MS);
-  const jitterFraction = computeJitterFraction(params.installationId);
+  const jitterFraction = computeJitterFraction(params.connection.installationId);
   const jitteredInterval = Math.round(interval * (1 + jitterFraction));
 
   let inFlight = false;
@@ -80,9 +78,7 @@ export function startCadence(params: CadenceParams): void {
       // wiped alongside facts that were actually sent.
       const bufferedFacts = params.getBufferedFacts();
       const response = await sendCheckIn({
-        baseUrl: params.baseUrl,
-        credential: params.credential,
-        installationId: params.installationId,
+        connection: params.connection,
         sdkVersion: params.sdkVersion,
         observedVersion: env.observedVersion,
         platform: env.platform,

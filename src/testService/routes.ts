@@ -13,6 +13,7 @@ import { computeJitterFraction } from "../jitter.js";
 import { sendCheckIn } from "../protocol/checkIn.js";
 import { checkPreAction } from "../protocol/preActionCheck.js";
 import { verifyAndParsePolicy } from "../protocol/policy.js";
+import type { BackendConnection } from "../types.js";
 import type { Capabilities } from "./wireTypes.js";
 
 /** The mock backend accepts any bearer value -- this test service has no
@@ -113,6 +114,12 @@ export const RoutesLayer = Layer.unwrap(
                 new Error(`electron test-service: unknown adapter ${params.id}`),
               );
 
+            const connection: BackendConnection = {
+              baseUrl: instance.checkInBaseUrl,
+              credential: TEST_SERVICE_CREDENTIAL,
+              installationId: instance.installationId,
+            };
+
             switch (payload.command) {
               case "injectEvent": {
                 const args = Array.isArray(payload.payload) ? payload.payload : [];
@@ -135,9 +142,7 @@ export const RoutesLayer = Layer.unwrap(
                 try {
                   const response = yield* Effect.promise(() =>
                     sendCheckIn({
-                      baseUrl: instance.checkInBaseUrl,
-                      credential: TEST_SERVICE_CREDENTIAL,
-                      installationId: instance.installationId,
+                      connection,
                       sdkVersion: capabilities.sdkVersion,
                       observedVersion: capabilities.sdkVersion,
                       platform: process.platform,
@@ -162,9 +167,7 @@ export const RoutesLayer = Layer.unwrap(
               case "triggerPreActionCheck": {
                 const policy = yield* Effect.promise(() =>
                   checkPreAction({
-                    baseUrl: instance.checkInBaseUrl,
-                    credential: TEST_SERVICE_CREDENTIAL,
-                    installationId: instance.installationId,
+                    connection,
                     stage: payload.stage,
                     trustedKeyPem: instance.publicKeyPem,
                   }),

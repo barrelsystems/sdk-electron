@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { sendCheckIn, type CheckInParams } from "./checkIn.js";
 
 const baseParams: CheckInParams = {
-  baseUrl: "https://ingest.example.com",
-  credential: "cred",
-  installationId: "11111111-1111-1111-1111-111111111111",
+  connection: {
+    baseUrl: "https://ingest.example.com",
+    credential: "cred",
+    installationId: "11111111-1111-1111-1111-111111111111",
+  },
   sdkVersion: "0.0.1",
   observedVersion: "1.0.0",
   platform: "darwin",

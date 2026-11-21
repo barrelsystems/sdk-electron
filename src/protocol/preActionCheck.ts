@@ -1,14 +1,12 @@
 import { verifyAndParsePolicy } from "./policy.js";
 import { postProtocolRequest } from "./postProtocolRequest.js";
 import { PROTOCOL_VERSION } from "../types.js";
-import type { Policy } from "../types.js";
+import type { BackendConnection, Policy } from "../types.js";
 
 const PRE_ACTION_CHECK_TIMEOUT_MS = 10_000;
 
 export interface PreActionCheckParams {
-  baseUrl: string;
-  credential: string;
-  installationId: string;
+  connection: BackendConnection;
   stage: "pre-download" | "pre-apply";
   trustedKeyPem: string;
   log?: ((message: string) => void) | undefined;
@@ -21,11 +19,11 @@ export interface PreActionCheckParams {
  */
 export async function checkPreAction(params: PreActionCheckParams): Promise<Policy | undefined> {
   const parsed = await postProtocolRequest({
-    url: `${params.baseUrl}/pre-action-check`,
-    credential: params.credential,
+    url: `${params.connection.baseUrl}/pre-action-check`,
+    credential: params.connection.credential,
     body: {
       protocolVersion: PROTOCOL_VERSION,
-      installationId: params.installationId,
+      installationId: params.connection.installationId,
       stage: params.stage,
     },
     timeoutMs: PRE_ACTION_CHECK_TIMEOUT_MS,
