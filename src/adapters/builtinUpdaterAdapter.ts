@@ -4,7 +4,7 @@ import type { Phase } from "../errorTaxonomy.js";
 import { guardAdapterCallback } from "../internalDefects.js";
 import { recordAdapterStateFact } from "../persistence/bufferedFacts.js";
 import type { AdapterState, UpdateFailure, UpdateFailureMode } from "../types.js";
-import type { BuiltinOperation } from "./builtinUpdaterErrorMap.js";
+import type { BuiltinOperation, BuiltinUpdaterError } from "./builtinUpdaterErrorMap.js";
 import { mapBuiltinUpdaterError } from "./builtinUpdaterErrorMap.js";
 import type { UpdaterAdapter } from "./electronUpdaterAdapter.js";
 import { createListenerSet } from "./listenerSet.js";
@@ -65,11 +65,11 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
     });
   });
 
-  updater.on("error", (error) => {
+  updater.on("error", (error: BuiltinUpdaterError) => {
     guardAdapterCallback("electron-builtin:error", () => {
       const operation: BuiltinOperation = awaitingRelaunch ? "relaunching" : "checking";
       awaitingRelaunch = false;
-      const { failureMode, phase } = mapBuiltinUpdaterError(operation);
+      const { failureMode, phase } = mapBuiltinUpdaterError(error, operation);
       recordFailure(failureMode, phase, error.message);
     });
   });
@@ -83,9 +83,10 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
       try {
         updater.checkForUpdates();
       } catch (error) {
-        const { failureMode, phase } = mapBuiltinUpdaterError("configuring");
-        const platformCode = error instanceof Error ? error.message : String(error);
-        recordFailure(failureMode, phase, platformCode);
+        const builtinError: BuiltinUpdaterError =
+          error instanceof Error ? error : new Error(String(error));
+        const { failureMode, phase } = mapBuiltinUpdaterError(builtinError, "configuring");
+        recordFailure(failureMode, phase, builtinError.message);
       }
     },
     // No lever exists here: `update-available` already means Squirrel.Mac
