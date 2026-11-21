@@ -59,21 +59,15 @@ export type UpdateFailureMode =
   | "download-size-exceeded"
   | "download-stream-incomplete"
   | "diff-patch-incompatible"
-  | "extraction-failed"
   | "target-not-found-in-manifest"
   | "temp-storage-constraint"
   | "install-write-failed"
   | "install-auth-required-or-failed"
-  | "install-downgrade-blocked"
   | "install-relaunch-failed"
   | "install-missing-update"
   | "config-invalid"
   | "cors-misconfigured"
-  | "platform-unsupported"
   | "translocation-blocked"
-  | "webkit-terminated"
-  | "release-notes-failed"
-  | "resume-appcast-failed"
   | "unknown";
 
 export interface UpdateFailure {
