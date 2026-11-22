@@ -196,7 +196,8 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
   updater.on("error", (error) => {
     guardAdapterCallback("electron-updater:error", () => {
       const { failureMode, phase } = mapElectronUpdaterError(error, currentPhase);
-      const platformCode = error.code ?? error.message;
+      const platformCode =
+        error.code ?? (error.name === "ElevationDeniedError" ? error.name : error.message);
       const built = classifyAndRecordFailure("electron-updater", failureMode, phase, platformCode);
       lastError = built.failure;
       setState(built.state);

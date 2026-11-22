@@ -190,6 +190,23 @@ describe("createElectronUpdaterAdapter", () => {
     });
   });
 
+  it("preserves the native name of an authorization error that has no code", () => {
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+    const error = Object.assign(new Error("localized authorization message"), {
+      name: "ElevationDeniedError",
+    });
+
+    updater.emit("error", error);
+
+    expect(adapter.getLastUpdateError()).toMatchObject({
+      failureMode: "install-auth-required-or-failed",
+      phase: "install",
+      platform: "electron-updater",
+      platformCode: "ElevationDeniedError",
+    });
+  });
+
   it("getLastUpdateError returns undefined until something has actually failed", () => {
     const adapter = createElectronUpdaterAdapter(createFakeUpdater());
     expect(adapter.getLastUpdateError()).toBeUndefined();

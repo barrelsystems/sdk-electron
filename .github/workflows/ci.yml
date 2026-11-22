@@ -13,9 +13,17 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  verify:
-    runs-on: ubuntu-latest
+  verify-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -34,8 +42,8 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
         run: |
           set -euo pipefail
-          pnpm install --frozen-lockfile 2>&1 | tee /tmp/pnpm-install.log
-          if grep -q "Ignored build scripts" /tmp/pnpm-install.log; then
+          pnpm install --frozen-lockfile 2>&1 | tee "$RUNNER_TEMP/pnpm-install.log"
+          if grep -q "Ignored build scripts" "$RUNNER_TEMP/pnpm-install.log"; then
             echo "::error::pnpm ignored a dependency build script. Run 'pnpm approve-builds' and explicitly allow or reject before merging."
             exit 1
           fi
@@ -57,3 +65,37 @@ jobs:
 
       - name: Check bundle size
         run: pnpm size
+
+      - name: Run conformance
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/test-service.log"
+          node --import tsx --import ./src/testService/registerElectronMock.ts src/testService/main.ts > "$log" 2>&1 &
+          service_pid=$!
+          trap 'kill "$service_pid" 2>/dev/null || true' EXIT
+          for _ in {1..100}; do
+            url=$(grep -oE 'http://localhost:[0-9]+' "$log" | tail -1 || true)
+            [ -n "$url" ] && break
+            kill -0 "$service_pid" 2>/dev/null || { cat "$log"; exit 1; }
+            sleep 0.2
+          done
+          if [ -z "$url" ]; then
+            cat "$log"
+            echo "::error::Test service did not become ready"
+            exit 1
+          fi
+          pnpm exec sdk-conformance-harness conformance "$url" --junit "$RUNNER_TEMP/conformance.xml" --history "$RUNNER_TEMP/conformance-history.json"
+
+      - name: Show test-service diagnostics
+        if: failure()
+        run: cat "$RUNNER_TEMP/test-service.log" 2>/dev/null || true
+
+  verify:
+    if: always()
+    needs: [verify-platform]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every platform to pass
+        env:
+          PLATFORM_RESULT: ${{ needs.verify-platform.result }}
+        run: test "$PLATFORM_RESULT" = success
