@@ -10,7 +10,7 @@ importers:
     devDependencies:
       '@barrel-kit/sdk-conformance-harness':
         specifier: github:barrelsystems/sdk-conformance-harness#dist
-        version: https://codeload.github.com/barrelsystems/sdk-conformance-harness/tar.gz/b00f01fa7e9f78008a93397480359d2452da04b9(redis@6.3.1)
+        version: https://codeload.github.com/barrelsystems/sdk-conformance-harness/tar.gz/2d4ed980265cd2e69459c906f0ed968147b614fa(redis@6.3.1)
       '@effect/platform-node':
         specifier: ^4.1.4
         version: 4.1.4(effect@4.1.4)(redis@6.3.1)
@@ -77,8 +77,8 @@ packages:
     resolution: {integrity: sha512-UjI/dKmwJwT9pOszJitq2G6EObZPnsZUfdCr92z2TlF3EZK9J3EdfOKUrCzHl6wFthbzwhzl1Soc/UIwxRiq6w==}
     engines: {node: '>=6.9.0'}
 
-  '@barrel-kit/sdk-conformance-harness@https://codeload.github.com/barrelsystems/sdk-conformance-harness/tar.gz/b00f01fa7e9f78008a93397480359d2452da04b9':
-    resolution: {tarball: https://codeload.github.com/barrelsystems/sdk-conformance-harness/tar.gz/b00f01fa7e9f78008a93397480359d2452da04b9}
+  '@barrel-kit/sdk-conformance-harness@https://codeload.github.com/barrelsystems/sdk-conformance-harness/tar.gz/2d4ed980265cd2e69459c906f0ed968147b614fa':
+    resolution: {tarball: https://codeload.github.com/barrelsystems/sdk-conformance-harness/tar.gz/2d4ed980265cd2e69459c906f0ed968147b614fa}
     version: 0.0.1
     engines: {node: '>=18'}
     hasBin: true
@@ -1507,7 +1507,7 @@ snapshots:
       '@babel/helper-string-parser': 7.29.14
       '@babel/helper-validator-identifier': 7.29.7
 
-  '@barrel-kit/sdk-conformance-harness@https://codeload.github.com/barrelsystems/sdk-conformance-harness/tar.gz/b00f01fa7e9f78008a93397480359d2452da04b9(redis@6.3.1)':
+  '@barrel-kit/sdk-conformance-harness@https://codeload.github.com/barrelsystems/sdk-conformance-harness/tar.gz/2d4ed980265cd2e69459c906f0ed968147b614fa(redis@6.3.1)':
     dependencies:
       '@effect/platform-node': 4.1.4(effect@4.1.4)(redis@6.3.1)
       commander: 15.1.0
