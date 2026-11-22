@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
-import { createDiskStore } from "./diskStore.js";
+import { createPersistenceWriter } from "./persistenceWriter.js";
 
 let expectedVersion: string | undefined;
 let filePath: string | undefined;
 
-const store = createDiskStore(
+const store = createPersistenceWriter(
   () => filePath,
   () => ({ expectedVersion }),
 );

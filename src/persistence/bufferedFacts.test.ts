@@ -24,6 +24,36 @@ describe("bufferedFacts", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it("preserves an unsent equal-valued observation across repeated acknowledgments", async () => {
+    const {
+      configureBufferedFacts,
+      getBufferedFacts,
+      recordAdapterStateFact,
+      clearBufferedFacts,
+      waitForBufferedFactsPersistence,
+    } = await import("./bufferedFacts.js");
+    await configureBufferedFacts(join(dir, "facts.json"));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+    try {
+      recordAdapterStateFact({ type: "checking" });
+      const sent = getBufferedFacts();
+      recordAdapterStateFact({ type: "downloaded" });
+      recordAdapterStateFact({ type: "checking" });
+      const before = getBufferedFacts();
+      expect(before[0]).toEqual(before[2]);
+
+      clearBufferedFacts(sent);
+      expect(getBufferedFacts()).toEqual(before.slice(1));
+      clearBufferedFacts(sent);
+      expect(getBufferedFacts()).toEqual(before.slice(1));
+      await waitForBufferedFactsPersistence();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("appends a new fact for a state never seen before", async () => {
     const { configureBufferedFacts, getBufferedFacts, recordAdapterStateFact } =
       await import("./bufferedFacts.js");
@@ -47,6 +77,16 @@ describe("bufferedFacts", () => {
     const facts = getBufferedFacts();
     expect(facts).toHaveLength(1);
     expect(facts[0]).toMatchObject({ occurrenceCount: 3 });
+  });
+
+  it("merges equivalent state fields regardless of object property order", async () => {
+    const { configureBufferedFacts, getBufferedFacts, recordAdapterStateFact } =
+      await import("./bufferedFacts.js");
+    await configureBufferedFacts(join(dir, "facts.json"));
+    recordAdapterStateFact({ type: "downloading", progress: 10 });
+    recordAdapterStateFact({ progress: 10, type: "downloading" });
+    expect(getBufferedFacts()).toHaveLength(1);
+    expect(getBufferedFacts()[0]).toMatchObject({ occurrenceCount: 2 });
   });
 
   it("keeps two available facts distinct when their release notes differ, instead of collapsing them", async () => {
@@ -110,7 +150,7 @@ describe("bufferedFacts", () => {
     expect(getLastBufferedUpdateError()).toBeUndefined();
   });
 
-  it("keeps a sustained outage of repeated checking/failed pairs bounded, not 32 duplicates", async () => {
+  it("keeps distinct checking/failure windows bounded without merging across intervening facts", async () => {
     const {
       configureBufferedFacts,
       getBufferedFacts,
@@ -124,9 +164,9 @@ describe("bufferedFacts", () => {
       recordUpdateErrorFact(FAILURE);
     }
 
-    // One merged entry per distinct (kind, discriminant) pair -- checking and the
-    // one failure mode -- never one entry per observation.
-    expect(getBufferedFacts()).toHaveLength(2);
+    // Each checking/failure pair is a separate observation window.
+    expect(getBufferedFacts()).toHaveLength(32);
+    expect(getBufferedFacts().filter((fact) => fact.kind === "updateError")).toHaveLength(20);
   });
 
   it("caps at 32 entries, evicting the lowest-priority, oldest entry to make room", async () => {

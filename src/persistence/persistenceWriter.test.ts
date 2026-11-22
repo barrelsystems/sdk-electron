@@ -2,9 +2,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createDiskStore } from "./diskStore.js";
+import { createPersistenceWriter } from "./persistenceWriter.js";
 
-describe("createDiskStore", () => {
+describe("createPersistenceWriter", () => {
   let dir: string;
 
   beforeEach(() => {
@@ -17,7 +17,7 @@ describe("createDiskStore", () => {
 
   it("persists the current snapshot to disk, creating the directory if needed", async () => {
     const filePath = join(dir, "nested", "value.json");
-    const store = createDiskStore(
+    const store = createPersistenceWriter(
       () => filePath,
       () => ({ hello: "world" }),
     );
@@ -29,7 +29,7 @@ describe("createDiskStore", () => {
 
   it("is a no-op when getPath() returns undefined", async () => {
     const filePath = join(dir, "value.json");
-    const store = createDiskStore(
+    const store = createPersistenceWriter(
       () => undefined,
       () => ({ hello: "world" }),
     );
@@ -43,7 +43,7 @@ describe("createDiskStore", () => {
     const blockerFile = join(dir, "blocker");
     writeFileSync(blockerFile, "not a directory");
     const impossiblePath = join(blockerFile, "value.json");
-    const store = createDiskStore(
+    const store = createPersistenceWriter(
       () => impossiblePath,
       () => ({ hello: "world" }),
     );
@@ -54,7 +54,7 @@ describe("createDiskStore", () => {
   it("serializes overlapping persist() calls so the file always lands on the latest snapshot", async () => {
     const filePath = join(dir, "value.json");
     let snapshot = { count: 1 };
-    const store = createDiskStore(
+    const store = createPersistenceWriter(
       () => filePath,
       () => snapshot,
     );

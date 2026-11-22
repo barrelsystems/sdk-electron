@@ -7,6 +7,10 @@ import * as Layer from "effect/Layer";
 import { HttpRouter, HttpServer } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { RoutesLayer } from "./routes.js";
+import { runBufferExitProbe } from "./bufferExitProbe.js";
+
+const probeConfig = process.env["BARREL_BUFFER_PROBE"];
+if (probeConfig) await runBufferExitProbe(probeConfig);
 
 const program = Effect.gen(function* () {
   const portDeferred = yield* Deferred.make<number>();

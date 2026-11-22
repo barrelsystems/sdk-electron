@@ -1,12 +1,12 @@
 import { createPublicKey, verify } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { CheckInResponse } from "../types.js";
-import { createDiskStore } from "./diskStore.js";
+import { createPersistenceWriter } from "./persistenceWriter.js";
 
 let cachedTrustedKeyPem: string | undefined;
 let filePath: string | undefined;
 
-const store = createDiskStore(
+const store = createPersistenceWriter(
   () => filePath,
   () => ({ publicKeyPem: cachedTrustedKeyPem }),
 );

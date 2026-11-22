@@ -12,6 +12,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { HttpApiBuilder } from "effect/http-api";
+import { probeBufferExit } from "./bufferExitProbe.js";
 import { computeJitterFraction } from "../jitter.js";
 
 interface Worker {
@@ -103,6 +104,8 @@ export const RoutesLayer = Layer.unwrap(
         )
         .handle("runCommand", ({ params, payload }) =>
           Effect.promise(async () => {
+            if (payload.command === "probeBufferExit")
+              return { result: await probeBufferExit(payload.mode, payload.facts) };
             const worker = workers.get(params.id);
             if (!worker) throw new Error("unknown SDK worker");
             return { result: await worker.command(payload) };
