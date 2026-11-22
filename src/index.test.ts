@@ -61,6 +61,37 @@ describe("init", () => {
     delete (process as { type?: string }).type;
   });
 
+  it("captures the channel supplied at init time", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+    vi.stubGlobal("fetch", fetchMock);
+    const { init } = await import("./index.js");
+    const config = { credential: "cred", channel: "beta" };
+    init(config);
+    config.channel = "stable";
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const call = fetchMock.mock.calls[0];
+    if (call === undefined) throw new Error("missing check-in");
+
+    expect(JSON.parse(call[1].body).channel).toBe("beta");
+  });
+
+  it.each([undefined, "Beta / Custom"])(
+    "reports the configured channel %s on startup",
+    async (channel) => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+      vi.stubGlobal("fetch", fetchMock);
+      const { init } = await import("./index.js");
+      init({ credential: "cred", ...(channel === undefined ? {} : { channel }) });
+
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      const call = fetchMock.mock.calls[0];
+      if (call === undefined) throw new Error("missing check-in");
+
+      expect(JSON.parse(call[1].body).channel).toBe(channel ?? "stable");
+    },
+  );
+
   it("is silent (makes no network call) until init() is called", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);

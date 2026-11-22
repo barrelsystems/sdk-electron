@@ -8,6 +8,7 @@ const baseParams: CheckInParams = {
     installationId: "11111111-1111-1111-1111-111111111111",
   },
   sdkVersion: "0.0.1",
+  channel: "stable",
   observedVersion: "1.0.0",
   platform: "darwin",
   arch: "arm64",

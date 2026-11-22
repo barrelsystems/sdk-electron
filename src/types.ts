@@ -14,6 +14,8 @@ export interface InitConfig {
   baseUrl?: string;
   /** Developer-configurable; the server-enforced floor is 15 minutes regardless of what's passed here. */
   checkInIntervalMs?: number;
+  /** The host app's release channel, reported verbatim. Defaults to "stable". */
+  channel?: string;
   attributes?: Record<string, string>;
   /** On by default. When off, a found update is never downloaded. */
   autoDownload?: boolean;
@@ -98,6 +100,7 @@ export interface CheckInRequest {
   eventId: string;
   checkedInAt: string;
   sdkVersion: string;
+  channel: string;
   observedVersion: string;
   platform: string;
   arch: string;

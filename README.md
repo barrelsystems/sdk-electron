@@ -82,6 +82,8 @@ A few things happen automatically once you call `init()`:
 
 - Checks in on launch, then every 30 minutes, jittered per install so your
   fleet doesn't all hit Barrel's ingestion at once.
+- Reports `InitConfig.channel` verbatim on every check-in (default:
+  `"stable"`), without changing the updater's feed.
 - Verifies the signature on every Policy response with Node's own
   `node:crypto` — no third-party crypto dependency.
 - Keeps one random installation ID on disk. Not your users' hardware
@@ -108,8 +110,8 @@ A few things happen automatically once you call `init()`:
 - Handles Windows' Squirrel quit-on-install lifecycle for you. Don't also
   check `electron-squirrel-startup` yourself, and call `init()` before
   creating any window.
-- Catches its own bugs instead of crashing your app. Right now that's just
-  a local tally — we haven't built anywhere to send it yet.
+- Tallies its own adapter defects locally without sending reports or
+  crashing your app.
 
 ## Picking an updater
 
@@ -120,10 +122,9 @@ whichever one you already brought in.
 
 ## What's still yours
 
-Channels, targeting, and rollout percentages are configured on Barrel's
-dashboard, not in this SDK. Your manifest and binaries are entirely your
-own to build and host — `updateFeedURL` just points at them. Barrel never
-hosts or validates either.
+Targeting and rollout percentages are configured on Barrel's dashboard.
+Your manifest and binaries are yours to build and host; `updateFeedURL`
+just points at them. Barrel never hosts or validates either.
 
 ## Dependencies
 

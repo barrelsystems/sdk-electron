@@ -144,6 +144,7 @@ export const RoutesLayer = Layer.unwrap(
                     sendCheckIn({
                       connection,
                       sdkVersion: capabilities.sdkVersion,
+                      channel: "stable",
                       observedVersion: capabilities.sdkVersion,
                       platform: process.platform,
                       arch: process.arch,
