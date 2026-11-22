@@ -40,6 +40,7 @@ interface AdapterInstance {
   readonly installationId: string;
   readonly checkInBaseUrl: string;
   readonly publicKeyPem: string;
+  readonly channel: string;
   /** Mirrors `cadence.ts`'s own tick: a `checkNow` that arrives while one is
    * already in flight for this instance is skipped, not queued, so it never
    * performs a second real check-in. */
@@ -95,6 +96,7 @@ export const RoutesLayer = Layer.unwrap(
                 installationId: randomUUID(),
                 checkInBaseUrl: payload.checkInBaseUrl,
                 publicKeyPem: payload.publicKeyPem,
+                channel: payload.channel ?? "stable",
                 checkInFlight: false,
               });
 
@@ -144,7 +146,7 @@ export const RoutesLayer = Layer.unwrap(
                     sendCheckIn({
                       connection,
                       sdkVersion: capabilities.sdkVersion,
-                      channel: "stable",
+                      channel: instance.channel,
                       observedVersion: capabilities.sdkVersion,
                       platform: process.platform,
                       arch: process.arch,

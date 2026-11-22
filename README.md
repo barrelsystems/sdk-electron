@@ -82,8 +82,9 @@ A few things happen automatically once you call `init()`:
 
 - Checks in on launch, then every 30 minutes, jittered per install so your
   fleet doesn't all hit Barrel's ingestion at once.
-- Reports `InitConfig.channel` verbatim on every check-in (default:
-  `"stable"`), without changing the updater's feed.
+- Reports the channel key in `InitConfig.channel` verbatim on every check-in
+  (default: `"stable"`), without changing the updater's feed. Keys are
+  case-sensitive; use the configured key rather than its display name.
 - Verifies the signature on every Policy response with Node's own
   `node:crypto` — no third-party crypto dependency.
 - Keeps one random installation ID on disk. Not your users' hardware
