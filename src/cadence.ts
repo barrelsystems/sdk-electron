@@ -48,7 +48,13 @@ export function policyHoldsTheVendorCheck(
  * and foreground/focus. Overlapping attempts are impossible: a tick that fires
  * while the previous one is still in flight is skipped, not queued.
  */
-export function startCadence(params: CadenceParams): void {
+export interface Cadence {
+  ready: Promise<void>;
+  checkNow(): Promise<void>;
+  stop(): void;
+}
+
+export function startCadence(params: CadenceParams): Cadence {
   if (params.checkInIntervalMs < MIN_INTERVAL_MS) {
     params.log?.(
       `cadence: requested interval ${params.checkInIntervalMs}ms is below the ${MIN_INTERVAL_MS}ms floor, clamped`,
@@ -98,9 +104,22 @@ export function startCadence(params: CadenceParams): void {
     }
   };
 
-  void tick();
-  setInterval(() => void tick(), jitteredInterval);
+  const ready = tick();
+  const timer = setInterval(() => void tick(), jitteredInterval);
+  const trigger = (): void => {
+    void tick();
+  };
 
-  powerMonitor.on("resume", () => void tick());
-  app.on("browser-window-focus", () => void tick());
+  powerMonitor.on("resume", trigger);
+  app.on("browser-window-focus", trigger);
+
+  return {
+    ready,
+    checkNow: tick,
+    stop() {
+      clearInterval(timer);
+      powerMonitor.removeListener("resume", trigger);
+      app.removeListener("browser-window-focus", trigger);
+    },
+  };
 }
