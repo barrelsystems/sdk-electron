@@ -1,8 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { EventEmitter } from "node:events";
+import {
+  createElectronUpdaterAdapter,
+  type ElectronUpdaterLike,
+} from "./electronUpdaterAdapter.js";
+import { categoryForPhase, resolveFailureTitle, type Phase } from "../errorTaxonomy.js";
+import type { UpdateFailureMode } from "../types.js";
+import { describe, expect, it, vi } from "vitest";
 import { mapElectronUpdaterError } from "./electronUpdaterErrorMap.js";
 
+vi.mock("electron", () => ({ app: { isPackaged: false } }));
+
 describe("mapElectronUpdaterError", () => {
-  const cases: Array<[string, "check" | "download" | "idle", string, string]> = [
+  const cases: Array<[string, "check" | "download" | "idle", UpdateFailureMode, Phase]> = [
     ["ERR_UPDATER_CHANNEL_FILE_NOT_FOUND", "idle", "manifest-unreachable", "check"],
     ["ERR_UPDATER_INVALID_VERSION", "idle", "version-invalid", "check"],
     ["ERR_UPDATER_MANIFEST_NOT_SIGNED", "idle", "signature-missing", "verify"],
@@ -16,6 +25,9 @@ describe("mapElectronUpdaterError", () => {
     ["ERR_UPDATER_CROSS_ORIGIN_HEADERS_NOT_CONFIGURED", "idle", "cors-misconfigured", "config"],
     ["ERR_UPDATER_INVALID_CROSS_ORIGIN_HEADERS", "idle", "cors-misconfigured", "config"],
     ["ERR_UPDATER_CROSS_ORIGIN_HEADER_POLICY_MISSING", "idle", "cors-misconfigured", "config"],
+    ["ENOSPC", "idle", "temp-storage-constraint", "download"],
+    ["EROFS", "idle", "temp-storage-constraint", "download"],
+    ["EDQUOT", "idle", "temp-storage-constraint", "download"],
     ["HTTP_ERROR_500", "idle", "download-transport-failed", "download"],
     ["ECONNREFUSED", "idle", "download-transport-failed", "download"],
     // Pinned 6.8.11's real code and `main`'s current replacement name, both kept live.
@@ -59,6 +71,40 @@ describe("mapElectronUpdaterError", () => {
     (code, phase, failureMode, expectedPhase) => {
       const result = mapElectronUpdaterError(Object.assign(new Error("x"), { code }), phase);
       expect(result).toEqual({ failureMode, phase: expectedPhase });
+    },
+  );
+
+  it.each(cases)(
+    "routes %s through the real adapter to its public failure",
+    (code, _phase, mode, phase) => {
+      const updater = new EventEmitter() as ElectronUpdaterLike & EventEmitter;
+      updater.checkForUpdates = vi.fn().mockResolvedValue(null);
+      updater.downloadUpdate = vi.fn().mockResolvedValue(null);
+      updater.quitAndInstall = vi.fn();
+      updater.setFeedURL = vi.fn();
+      const adapter = createElectronUpdaterAdapter(updater);
+      expect(adapter.getLastUpdateError()).toBeUndefined();
+
+      updater.emit("error", Object.assign(new Error("native failure"), { code }));
+
+      const failure = adapter.getLastUpdateError();
+      expect(failure).toEqual({
+        phase,
+        failureMode: mode,
+        title: resolveFailureTitle(mode),
+        platform: "electron-updater",
+        platformCode: code,
+      });
+      expect(adapter.getAdapterState()).toEqual({
+        type: "failed",
+        category: categoryForPhase(phase),
+        code: mode,
+        platformCode: code,
+      });
+
+      updater.emit("update-not-available");
+      expect(adapter.getAdapterState()).toEqual({ type: "idle" });
+      expect(adapter.getLastUpdateError()).toEqual(failure);
     },
   );
 

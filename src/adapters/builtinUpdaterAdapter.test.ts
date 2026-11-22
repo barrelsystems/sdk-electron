@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 import type { AutoUpdater } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { categoryForPhase, resolveFailureTitle, type Phase } from "../errorTaxonomy.js";
+import type { UpdateFailureMode } from "../types.js";
 import { createBuiltinUpdaterAdapter } from "./builtinUpdaterAdapter.js";
 
 function createFakeUpdater(): AutoUpdater & EventEmitter {
@@ -193,6 +195,64 @@ describe("createBuiltinUpdaterAdapter", () => {
     afterEach(() => {
       Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
     });
+
+    const nativeErrors: Array<[string, number, UpdateFailureMode, Phase]> = [
+      ["SQRLCodeSignatureErrorDomain", -1, "signature-invalid", "verify"],
+      ["SQRLCodeSignatureErrorDomain", -2, "signature-invalid", "verify"],
+      ...[-1, -2, -3, -4, -5, -6, -7, -8].map(
+        (code): [string, number, UpdateFailureMode, Phase] => [
+          "SQRLInstallerErrorDomain",
+          code,
+          "install-write-failed",
+          "install",
+        ],
+      ),
+      ["SQRLUpdaterErrorDomain", 2, "install-missing-update", "install"],
+      ["SQRLUpdaterErrorDomain", 3, "install-write-failed", "install"],
+      ["SQRLUpdaterErrorDomain", 4, "signature-invalid", "verify"],
+      ...[5, 6, 7].map((code): [string, number, UpdateFailureMode, Phase] => [
+        "SQRLUpdaterErrorDomain",
+        code,
+        "manifest-parse-failed",
+        "check",
+      ]),
+      ["SQRLUpdaterErrorDomain", 8, "translocation-blocked", "check"],
+      ["UnrecognizedDomain", 123, "unknown", "check"],
+    ];
+
+    it.each(nativeErrors)(
+      "preserves native %s/%d in the public error",
+      (domain, code, mode, phase) => {
+        const updater = createFakeUpdater();
+        const adapter = createBuiltinUpdaterAdapter(updater);
+        expect(adapter.getLastUpdateError()).toBeUndefined();
+        const platformCode = `${domain}:${code}`;
+
+        updater.emit(
+          "error",
+          Object.assign(new Error("localized native message"), { domain, code }),
+        );
+
+        const failure = adapter.getLastUpdateError();
+        expect(failure).toEqual({
+          phase,
+          failureMode: mode,
+          title: resolveFailureTitle(mode),
+          platform: "electron-builtin",
+          platformCode,
+        });
+        expect(adapter.getAdapterState()).toEqual({
+          type: "failed",
+          category: categoryForPhase(phase),
+          code: mode,
+          platformCode,
+        });
+
+        updater.emit("update-not-available");
+        expect(adapter.getAdapterState()).toEqual({ type: "idle" });
+        expect(adapter.getLastUpdateError()).toEqual(failure);
+      },
+    );
 
     it("a thrown checkForUpdates() surfaces as config-invalid, not a crash", () => {
       const updater = createFakeUpdater();

@@ -74,7 +74,11 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
       awaitingRelaunch = false;
       targetVersion = undefined;
       const { failureMode, phase } = mapBuiltinUpdaterError(error, operation);
-      recordFailure(failureMode, phase, error.message);
+      const platformCode =
+        process.platform === "darwin" && error.domain !== undefined && error.code !== undefined
+          ? `${error.domain}:${error.code}`
+          : error.message;
+      recordFailure(failureMode, phase, platformCode);
     });
   });
 

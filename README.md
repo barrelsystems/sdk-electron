@@ -6,6 +6,9 @@ Electron's built-in `autoUpdater` otherwise — and reports what actually
 happened on a check, download, or install, instead of leaving you to
 reconstruct it from support tickets.
 
+`electron-updater` supports macOS, Windows, and Linux. Electron's built-in
+`autoUpdater` supports macOS and Windows; Linux apps need `electron-updater`.
+
 Your release feed and binaries stay on your own infrastructure. Barrel
 doesn't host or verify either one. If our backend is down, signs something
 wrong, or is just unreachable, updates keep working exactly as they would
