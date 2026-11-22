@@ -6,7 +6,7 @@ import { BarrelConfigError } from "./errors.js";
 import type { HostControl } from "./hostControl.js";
 import { startHostControl } from "./hostControl.js";
 import { DEFAULT_BASE_URL, PUBLIC_ED25519_KEY_PEM } from "./keys.js";
-import { resolveFailureTitle } from "./errorTaxonomy.js";
+import { classifyAndRecordFailure, resolveFailureTitle } from "./errorTaxonomy.js";
 import {
   clearBufferedFacts,
   configureBufferedFacts,
@@ -19,6 +19,11 @@ import {
   getOrCreateTrustedKey,
   getTrustedKey,
 } from "./persistence/keyRotation.js";
+import {
+  clearExpectedVersion,
+  configureVersionExpectation,
+  setExpectedVersion,
+} from "./persistence/versionExpectation.js";
 import { verifyAndParsePolicy } from "./protocol/policy.js";
 import { quitIfSquirrelStartupEvent } from "./squirrelStartup.js";
 import type { AdapterState, InitConfig, Policy, UpdateFailure } from "./types.js";
@@ -35,6 +40,25 @@ let debugLog: ((message: string) => void) | undefined;
 let updaterAdapter: UpdaterAdapter | undefined;
 let hostControl: HostControl | undefined;
 let pendingStateChangeListeners: ((state: AdapterState) => void)[] = [];
+
+/**
+ * Resolves what the previous session's apply attempt, if any, expected
+ * to be running by now against what's actually running, then clears the
+ * marker either way so this only ever fires once per attempt.
+ */
+function checkVersionExpectation(expectedVersion: string | undefined): void {
+  if (expectedVersion === undefined) return;
+
+  if (expectedVersion !== app.getVersion()) {
+    classifyAndRecordFailure(
+      "version-check",
+      "apply-not-confirmed",
+      "install",
+      `expected ${expectedVersion}, running ${app.getVersion()}`,
+    );
+  }
+  void clearExpectedVersion();
+}
 
 /**
  * The only required call. Silent until this runs, throws synchronously only
@@ -75,47 +99,54 @@ export function init(config: InitConfig): void {
   const installationIdPath = join(app.getPath("userData"), "barrel-installation.json");
   const bufferedFactsPath = join(app.getPath("userData"), "barrel-buffered-facts.json");
   const trustedKeyPath = join(app.getPath("userData"), "barrel-trusted-key.json");
+  const versionExpectationPath = join(app.getPath("userData"), "barrel-version-expectation.json");
 
   void Promise.all([
     getOrCreateInstallationId(installationIdPath),
     createUpdaterAdapter(),
     configureBufferedFacts(bufferedFactsPath),
     getOrCreateTrustedKey(trustedKeyPath, PUBLIC_ED25519_KEY_PEM),
-  ]).then(([installationId, adapter]) => {
-    updaterAdapter = adapter;
-    if (config.updateFeedURL) adapter.setFeedURL(config.updateFeedURL);
-    for (const listener of pendingStateChangeListeners) adapter.onStateChange(listener);
-    pendingStateChangeListeners = [];
-    const connection = { baseUrl, credential: config.credential, installationId };
+    configureVersionExpectation(versionExpectationPath),
+  ]).then(
+    ([installationId, adapter, _bufferedFactsConfigured, _trustedKeyReady, expectedVersion]) => {
+      updaterAdapter = adapter;
+      checkVersionExpectation(expectedVersion);
+      if (config.updateFeedURL) adapter.setFeedURL(config.updateFeedURL);
+      for (const listener of pendingStateChangeListeners) adapter.onStateChange(listener);
+      pendingStateChangeListeners = [];
+      const connection = { baseUrl, credential: config.credential, installationId };
 
-    hostControl = startHostControl({
-      connection,
-      autoDownload,
-      adapter,
-      getTrustedKeyPem: () => getTrustedKey() ?? PUBLIC_ED25519_KEY_PEM,
-      log: debugLog,
-    });
-    startCadence({
-      connection,
-      checkInIntervalMs,
-      sdkVersion: __SDK_VERSION__,
-      attributes,
-      log: debugLog,
-      getAdapterState: () => adapter.getAdapterState(),
-      getBufferedFacts,
-      clearBufferedFacts,
-      checkForUpdates: () => adapter.checkForUpdates(),
-      getPolicy: () => lastKnownPolicy,
-      holdCacheMaxAge: config.holdCacheMaxAge ?? DEFAULT_HOLD_CACHE_MAX_AGE_MS,
-      onPolicyResponse: (response) => {
-        if (!response) return; // fail open — keep the last-known Policy
-        const parsed = verifyAndParsePolicy(response, getTrustedKey() ?? PUBLIC_ED25519_KEY_PEM);
-        if (parsed) lastKnownPolicy = parsed;
-        debugLog?.(parsed ? "policy: verified and updated" : "policy: verification failed");
-        applyKeyRotationIfPresent(response); // takes effect from the next check-in on
-      },
-    });
-  });
+      hostControl = startHostControl({
+        connection,
+        autoDownload,
+        adapter,
+        getTrustedKeyPem: () => getTrustedKey() ?? PUBLIC_ED25519_KEY_PEM,
+        recordVersionExpectation: setExpectedVersion,
+        clearVersionExpectation: clearExpectedVersion,
+        log: debugLog,
+      });
+      startCadence({
+        connection,
+        checkInIntervalMs,
+        sdkVersion: __SDK_VERSION__,
+        attributes,
+        log: debugLog,
+        getAdapterState: () => adapter.getAdapterState(),
+        getBufferedFacts,
+        clearBufferedFacts,
+        checkForUpdates: () => adapter.checkForUpdates(),
+        getPolicy: () => lastKnownPolicy,
+        holdCacheMaxAge: config.holdCacheMaxAge ?? DEFAULT_HOLD_CACHE_MAX_AGE_MS,
+        onPolicyResponse: (response) => {
+          if (!response) return; // fail open — keep the last-known Policy
+          const parsed = verifyAndParsePolicy(response, getTrustedKey() ?? PUBLIC_ED25519_KEY_PEM);
+          if (parsed) lastKnownPolicy = parsed;
+          debugLog?.(parsed ? "policy: verified and updated" : "policy: verification failed");
+          applyKeyRotationIfPresent(response); // takes effect from the next check-in on
+        },
+      });
+    },
+  );
 }
 
 /** Synchronous getter. `undefined` before the first successful check-in — never a synthesized default. */

@@ -8,6 +8,14 @@ export interface HostControlParams {
   autoDownload: boolean;
   adapter: UpdaterAdapter;
   getTrustedKeyPem: () => string;
+  /** Called with the version about to be applied, immediately before every
+   * `quitAndInstall()` call -- the version-expectation marker a later
+   * startup compares against to confirm the apply actually landed. */
+  recordVersionExpectation: (version: string) => Promise<void>;
+  /** Called when this session's own apply attempt already failed and was
+   * classified -- clears the marker above so the next startup doesn't
+   * also report it as an unexplained mismatch. */
+  clearVersionExpectation: () => Promise<void>;
   log?: ((message: string) => void) | undefined;
 }
 
@@ -24,6 +32,9 @@ export interface HostControl {
 export function startHostControl(params: HostControlParams): HostControl {
   let pendingInstall = false;
   let quitHandlerRegistered = false;
+  // Set right before quitAndInstall(), so a `failed` transition that
+  // follows it synchronously is known to be this same apply attempt.
+  let awaitingApplyOutcome = false;
 
   function canProceed(stage: "pre-download" | "pre-apply"): Promise<boolean> {
     return checkPreAction({
@@ -40,6 +51,15 @@ export function startHostControl(params: HostControlParams): HostControl {
     });
   }
 
+  async function applyNow(): Promise<void> {
+    const targetVersion = params.adapter.getTargetVersion();
+    if (targetVersion !== undefined) {
+      await params.recordVersionExpectation(targetVersion);
+      awaitingApplyOutcome = true;
+    }
+    params.adapter.quitAndInstall();
+  }
+
   function registerQuitHandler(): void {
     if (quitHandlerRegistered) return;
     quitHandlerRegistered = true;
@@ -52,7 +72,7 @@ export function startHostControl(params: HostControlParams): HostControl {
       event.preventDefault();
 
       void canProceed("pre-apply").then((proceed) => {
-        if (proceed) params.adapter.quitAndInstall();
+        if (proceed) void applyNow();
         else app.quit();
       });
     });
@@ -66,6 +86,11 @@ export function startHostControl(params: HostControlParams): HostControl {
     if (state.type === "downloaded") {
       pendingInstall = true;
       registerQuitHandler();
+    }
+
+    if (state.type === "failed" && awaitingApplyOutcome) {
+      awaitingApplyOutcome = false;
+      void params.clearVersionExpectation();
     }
   });
 
@@ -83,7 +108,7 @@ export function startHostControl(params: HostControlParams): HostControl {
       pendingInstall = false;
 
       void canProceed("pre-apply").then((proceed) => {
-        if (proceed) params.adapter.quitAndInstall();
+        if (proceed) void applyNow();
       });
     },
   };
