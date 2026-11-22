@@ -16,6 +16,7 @@ export interface CadenceParams {
   sdkVersion: string;
   channel: string;
   attributes: Record<string, string>;
+  retryInstallationPersistence: () => void;
   getAdapterState: () => AdapterState;
   getBufferedFacts: () => readonly BufferedFact[];
   /** Called only once ingestion ACKs the check-in that carried `sent` -- never optimistically. */
@@ -50,6 +51,8 @@ export function policyHoldsTheVendorCheck(
  */
 export interface Cadence {
   ready: Promise<void>;
+  intervalMs: number;
+  readonly inFlight: boolean;
   checkNow(): Promise<void>;
   stop(): void;
 }
@@ -73,6 +76,7 @@ export function startCadence(params: CadenceParams): Cadence {
     }
     inFlight = true;
     try {
+      params.retryInstallationPersistence();
       // The vendor update-feed check piggybacks on this same cadence but
       // MUST NOT run while held -- a Hold gates the check itself, not just
       // the download/apply actions downstream of it.
@@ -115,6 +119,10 @@ export function startCadence(params: CadenceParams): Cadence {
 
   return {
     ready,
+    intervalMs: jitteredInterval,
+    get inFlight() {
+      return inFlight;
+    },
     checkNow: tick,
     stop() {
       clearInterval(timer);

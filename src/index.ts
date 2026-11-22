@@ -13,7 +13,10 @@ import {
   getBufferedFacts,
   getLastBufferedUpdateError,
 } from "./persistence/bufferedFacts.js";
-import { getOrCreateInstallationId } from "./persistence/installationId.js";
+import {
+  getOrCreateInstallationId,
+  retryInstallationIdPersistence,
+} from "./persistence/installationId.js";
 import {
   applyKeyRotationIfPresent,
   getOrCreateTrustedKey,
@@ -128,6 +131,7 @@ export function init(config: InitConfig): void {
       });
       startCadence({
         connection,
+        retryInstallationPersistence: retryInstallationIdPersistence,
         checkInIntervalMs,
         sdkVersion: __SDK_VERSION__,
         channel,

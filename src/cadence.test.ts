@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { policyHoldsTheVendorCheck } from "./cadence.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { policyHoldsTheVendorCheck, startCadence } from "./cadence.js";
 import type { Policy } from "./types.js";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -66,4 +66,61 @@ describe("policyHoldsTheVendorCheck", () => {
     };
     expect(policyHoldsTheVendorCheck(held, DAY_MS, NOW)).toBe(true);
   });
+});
+
+vi.mock("electron", async () => {
+  const { EventEmitter } = await import("node:events");
+  return {
+    app: Object.assign(new EventEmitter(), { getVersion: () => "1.0.0" }),
+    powerMonitor: new EventEmitter(),
+  };
+});
+vi.mock("./protocol/checkIn.js", () => ({ sendCheckIn: vi.fn(async () => undefined) }));
+
+import { app, powerMonitor } from "electron";
+import { sendCheckIn } from "./protocol/checkIn.js";
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.clearAllMocks();
+});
+
+it("keeps the fixed timer anchored across focus and removes lifecycle listeners on stop", async () => {
+  vi.useFakeTimers();
+  const cadence = startCadence({
+    connection: {
+      baseUrl: "http://localhost",
+      credential: "test",
+      installationId: "test-installation",
+    },
+    checkInIntervalMs: 900_000,
+    sdkVersion: "test",
+    channel: "stable",
+    attributes: {},
+    retryInstallationPersistence: () => {},
+    getAdapterState: () => ({ type: "idle" }),
+    getBufferedFacts: () => [],
+    clearBufferedFacts: () => {},
+    onPolicyResponse: () => {},
+    checkForUpdates: () => {},
+    getPolicy: () => undefined,
+    holdCacheMaxAge: DAY_MS,
+  });
+  try {
+    await cadence.ready;
+    expect(sendCheckIn).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(cadence.intervalMs / 2);
+    app.emit("browser-window-focus");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sendCheckIn).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(cadence.intervalMs / 2);
+    expect(sendCheckIn).toHaveBeenCalledTimes(3);
+    cadence.stop();
+    app.emit("browser-window-focus");
+    powerMonitor.emit("resume");
+    await vi.advanceTimersByTimeAsync(cadence.intervalMs * 2);
+    expect(sendCheckIn).toHaveBeenCalledTimes(3);
+  } finally {
+    cadence.stop();
+  }
 });

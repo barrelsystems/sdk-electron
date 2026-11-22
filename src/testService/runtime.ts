@@ -1,5 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  cadenceState,
+  captureDebugMessages,
+  restoreInstallationPersistence,
+  getPersistedInstallationId,
+  triggerLifecycle,
+} from "./resilienceCommands.js";
 import { runBufferCommand } from "./bufferCommands.js";
 import * as sdk from "../index.js";
 import { cadence, hostControl } from "./runtimeCapture.js";
@@ -11,6 +18,15 @@ Object.defineProperty(process, "type", { value: "browser" });
 
 export async function command(payload: AdapterCommand): Promise<unknown> {
   switch (payload.command) {
+    case "getCadenceState":
+      return cadenceState();
+    case "triggerLifecycle":
+      triggerLifecycle(payload.event);
+      return null;
+    case "getPersistedInstallationId":
+      return getPersistedInstallationId();
+    case "restoreInstallationPersistence":
+      return restoreInstallationPersistence();
     case "setBufferPersistence":
     case "getBufferPersistenceState":
     case "recordFacts":
@@ -60,11 +76,20 @@ export async function initialize(config: CreateAdapterRequest): Promise<void> {
     join(directory, "barrel-trusted-key.json"),
     JSON.stringify({ publicKeyPem: config.publicKeyPem }),
   );
+  if (config.installationPersistence === "failed") {
+    await mkdir(join(directory, "barrel-installation.json"));
+  }
+  captureDebugMessages();
   sdk.init({
     credential: "test-service",
     baseUrl: config.checkInBaseUrl,
     channel: config.channel ?? "stable",
     autoDownload: false,
+    ...(config.attributes === undefined ? {} : { attributes: config.attributes }),
+    ...(config.debug === undefined ? {} : { debug: config.debug }),
+    ...(config.checkInIntervalMs === undefined
+      ? {}
+      : { checkInIntervalMs: config.checkInIntervalMs }),
   });
 
   while (!cadence) await new Promise<void>((resolve) => setTimeout(resolve, 1));
