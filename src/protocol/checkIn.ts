@@ -31,6 +31,7 @@ function toWireBufferedFact(fact: BufferedFact): WireBufferedFact {
 export interface CheckInParams {
   connection: BackendConnection;
   sdkVersion: string;
+  channel: string;
   observedVersion: string;
   platform: string;
   arch: string;
@@ -53,6 +54,7 @@ export async function sendCheckIn(params: CheckInParams): Promise<CheckInRespons
     eventId: randomUUID(),
     checkedInAt: new Date().toISOString(),
     sdkVersion: params.sdkVersion,
+    channel: params.channel,
     observedVersion: params.observedVersion,
     platform: params.platform,
     arch: params.arch,

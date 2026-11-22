@@ -14,6 +14,7 @@ export interface CadenceParams {
   connection: BackendConnection;
   checkInIntervalMs: number;
   sdkVersion: string;
+  channel: string;
   attributes: Record<string, string>;
   getAdapterState: () => AdapterState;
   getBufferedFacts: () => readonly BufferedFact[];
@@ -80,6 +81,7 @@ export function startCadence(params: CadenceParams): void {
       const response = await sendCheckIn({
         connection: params.connection,
         sdkVersion: params.sdkVersion,
+        channel: params.channel,
         observedVersion: env.observedVersion,
         platform: env.platform,
         arch: env.arch,

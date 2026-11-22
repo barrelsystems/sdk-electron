@@ -95,6 +95,7 @@ export function init(config: InitConfig): void {
   const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
   const checkInIntervalMs = config.checkInIntervalMs ?? DEFAULT_INTERVAL_MS;
   const attributes = config.attributes ?? {};
+  const channel = config.channel ?? "stable";
   const autoDownload = config.autoDownload ?? true;
   const installationIdPath = join(app.getPath("userData"), "barrel-installation.json");
   const bufferedFactsPath = join(app.getPath("userData"), "barrel-buffered-facts.json");
@@ -129,6 +130,7 @@ export function init(config: InitConfig): void {
         connection,
         checkInIntervalMs,
         sdkVersion: __SDK_VERSION__,
+        channel,
         attributes,
         log: debugLog,
         getAdapterState: () => adapter.getAdapterState(),
