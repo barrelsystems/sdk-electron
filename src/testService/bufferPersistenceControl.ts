@@ -1,6 +1,5 @@
 import { mkdir, rm } from "node:fs/promises";
 import { basename } from "node:path";
-import { waitForBufferedFactsPersistence } from "../persistence/bufferedFacts.js";
 
 type Mode = "normal" | "blocked" | "failed";
 let mode: Mode = "normal";
@@ -24,6 +23,9 @@ export async function setBufferPersistence(path: string, next: Mode): Promise<vo
   release?.();
   gate = undefined;
   release = undefined;
+  // The filesystem wrapper loads this module while persistence initializes.
+  // Resolve the completion barrier only when a control command runs.
+  const { waitForBufferedFactsPersistence } = await import("../persistence/bufferedFacts.js");
   await waitForBufferedFactsPersistence();
 
   if (mode === "failed") await rm(path, { recursive: true, force: true });

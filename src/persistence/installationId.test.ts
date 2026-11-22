@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -43,6 +43,18 @@ describe("getOrCreateInstallationId", () => {
     // never silently regenerating a new one.
     const idAgain = await getOrCreateInstallationId(impossiblePath);
     expect(idAgain).toBe(id);
+  });
+
+  it("retries the same cached ID after a failed write becomes writable", async () => {
+    const blocker = join(dir, "blocker");
+    writeFileSync(blocker, "not a directory");
+    const path = join(blocker, "installation.json");
+    const { getOrCreateInstallationId } = await import("./installationId.js");
+    const first = await getOrCreateInstallationId(path);
+    rmSync(blocker);
+
+    expect(await getOrCreateInstallationId(path)).toBe(first);
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ installationId: first });
   });
 
   it("serializes concurrent calls onto one resolution, never racing two writes", async () => {

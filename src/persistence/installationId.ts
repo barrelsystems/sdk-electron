@@ -7,6 +7,7 @@ let currentFilePath: string | undefined;
 // Serializes concurrent callers onto one in-flight resolution instead of a
 // lock object -- Node has no shared memory for a real mutex to guard here.
 let pending: Promise<string> | undefined;
+let pendingPersistence: Promise<void> | undefined;
 
 const store = createPersistenceWriter(
   () => currentFilePath,
@@ -20,7 +21,11 @@ const store = createPersistenceWriter(
  */
 export async function getOrCreateInstallationId(filePath: string): Promise<string> {
   currentFilePath = filePath;
-  if (cachedInstallationId !== undefined) return cachedInstallationId;
+  if (cachedInstallationId !== undefined) {
+    retryInstallationIdPersistence();
+    await waitForInstallationIdPersistence();
+    return cachedInstallationId;
+  }
 
   pending ??= resolveInstallationId(filePath).finally(() => {
     pending = undefined;
@@ -36,8 +41,22 @@ async function resolveInstallationId(filePath: string): Promise<string> {
   }
 
   cachedInstallationId = randomUUID();
-  await store.persist();
+  retryInstallationIdPersistence();
+  await waitForInstallationIdPersistence();
   return cachedInstallationId;
+}
+
+/** Schedules one background save; a later check-in retries if this attempt fails. */
+export function retryInstallationIdPersistence(): void {
+  if (cachedInstallationId === undefined || pendingPersistence !== undefined) return;
+
+  pendingPersistence = store.persist().finally(() => {
+    pendingPersistence = undefined;
+  });
+}
+
+export function waitForInstallationIdPersistence(): Promise<void> {
+  return pendingPersistence ?? Promise.resolve();
 }
 
 async function readExisting(filePath: string): Promise<string | undefined> {
