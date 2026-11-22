@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createDiskStore } from "./diskStore.js";
+import { createPersistenceWriter } from "./persistenceWriter.js";
 
 let cachedInstallationId: string | undefined;
 let currentFilePath: string | undefined;
@@ -8,7 +8,7 @@ let currentFilePath: string | undefined;
 // lock object -- Node has no shared memory for a real mutex to guard here.
 let pending: Promise<string> | undefined;
 
-const store = createDiskStore(
+const store = createPersistenceWriter(
   () => currentFilePath,
   () => ({ installationId: cachedInstallationId }),
 );

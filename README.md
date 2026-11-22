@@ -133,3 +133,5 @@ No required runtime dependencies of our own. `electron-updater` is an
 optional peer, wrapped only if you've already chosen it. Everything else —
 `node:crypto`, `node:fs`, `node:os` — is a Node built-in. This ships inside
 your app, so every dependency we add is one you'd carry, not us.
+
+Source ownership is described in [Architecture](docs/architecture.md).

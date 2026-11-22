@@ -2,19 +2,16 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-/**
- * Mirrors an in-memory value to disk: a non-blocking write on `persist()`,
- * fail-open on any disk error, and a synchronous exit-time fallback -- the
- * shape every local-state module in this SDK needs.
- */
-export interface DiskStore {
+/** Orders background snapshot writes, fails open, and saves synchronously at exit. */
+export interface PersistenceWriter {
   persist(): Promise<void>;
+  waitForPendingWrites(): Promise<void>;
 }
 
-export function createDiskStore(
+export function createPersistenceWriter(
   getPath: () => string | undefined,
   getSnapshot: () => unknown,
-): DiskStore {
+): PersistenceWriter {
   let mutex: Promise<void> = Promise.resolve();
   let exitFallbackRegistered = false;
 
@@ -39,6 +36,7 @@ export function createDiskStore(
   registerExitFallback();
 
   return {
+    waitForPendingWrites: () => mutex,
     persist(): Promise<void> {
       const path = getPath();
       if (path === undefined) return Promise.resolve();

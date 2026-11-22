@@ -11,6 +11,13 @@ registerHooks({
     nextResolve: (specifier: string, context?: Partial<ResolveHookContext>) => ResolveFnOutput,
   ): ResolveFnOutput {
     if (
+      specifier === "node:fs/promises" &&
+      context.parentURL?.endsWith("/persistence/persistenceWriter.ts")
+    ) {
+      return { url: new URL("./fakeDiskPromises.ts", import.meta.url).href, shortCircuit: true };
+    }
+
+    if (
       context.parentURL?.endsWith("/src/index.ts") &&
       (specifier === "./cadence.js" || specifier === "./hostControl.js")
     ) {

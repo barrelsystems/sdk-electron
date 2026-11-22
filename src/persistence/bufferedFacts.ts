@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { AdapterState, UpdateFailure } from "../types.js";
-import { createDiskStore } from "./diskStore.js";
+import { createPersistenceWriter } from "./persistenceWriter.js";
 
 const MAX_BUFFERED_FACTS = 32;
 const TERMINAL_ADAPTER_STATES = new Set<AdapterState["type"]>([
@@ -27,7 +27,7 @@ export type BufferedFact =
 let buffer: BufferedFact[] = [];
 let filePath: string | undefined;
 
-const store = createDiskStore(
+const store = createPersistenceWriter(
   () => filePath,
   () => ({ facts: buffer }),
 );
@@ -60,7 +60,7 @@ export function clearBufferedFacts(sent: readonly BufferedFact[]): void {
   void store.persist();
 }
 
-/** Appends an observed adapter-state transition, or merges it into a matching existing entry. */
+/** Appends an observed adapter-state transition, or merges it into a matching last entry. */
 export function recordAdapterStateFact(state: AdapterState): void {
   const now = new Date().toISOString();
   upsert({
@@ -72,7 +72,7 @@ export function recordAdapterStateFact(state: AdapterState): void {
   });
 }
 
-/** Appends an observed update error, or merges it into a matching existing entry.
+/** Appends an observed update error, or merges it into a matching last entry.
  * Strips `title` before storing -- it's never persisted, only derived at read time. */
 export function recordUpdateErrorFact(failure: UpdateFailure): void {
   const { title: _title, ...persisted } = failure;
@@ -110,31 +110,33 @@ interface FactClassification {
 function classify(fact: BufferedFact): FactClassification {
   if (fact.kind === "updateError")
     return {
-      discriminant: `updateError:${fact.failure.failureMode}:${fact.failure.platformCode}`,
+      discriminant: `updateError:${JSON.stringify([fact.failure.phase, fact.failure.failureMode, fact.failure.platform, fact.failure.platformCode])}`,
       priority: 1,
     };
 
   const state = fact.state;
   if (state.type === "failed")
-    return { discriminant: `adapterState:failed:${state.code}:${state.platformCode}`, priority: 1 };
+    return {
+      discriminant: `adapterState:failed:${JSON.stringify([state.category, state.code, state.platformCode])}`,
+      priority: 1,
+    };
 
-  // Differing release notes must never collapse into one fact and silently lose a version's notes.
-  const notesSuffix =
-    "releaseNotes" in state && state.releaseNotes !== undefined ? `:${state.releaseNotes}` : "";
+  const detail =
+    "progress" in state ? state.progress : "releaseNotes" in state ? state.releaseNotes : undefined;
+
   return {
-    discriminant: `adapterState:${state.type}${notesSuffix}`,
+    discriminant: `adapterState:${JSON.stringify([state.type, detail])}`,
     priority: TERMINAL_ADAPTER_STATES.has(state.type) ? 1 : 0,
   };
 }
 
-/** Merges `candidate` into a matching existing entry (same kind + discriminant,
- * wherever it sits in the buffer), or inserts it as new. */
+/** Merges only adjacent observations with identical discriminating fields. */
 function upsert(candidate: BufferedFact): void {
   const { discriminant, priority } = classify(candidate);
-  const existingIndex = buffer.findIndex((fact) => classify(fact).discriminant === discriminant);
+  const existingIndex = buffer.length - 1;
   const existing = existingIndex === -1 ? undefined : buffer[existingIndex];
 
-  if (existingIndex !== -1 && existing !== undefined) {
+  if (existing !== undefined && classify(existing).discriminant === discriminant) {
     buffer[existingIndex] = {
       ...candidate,
       firstObservedAt: existing.firstObservedAt,
@@ -181,4 +183,8 @@ function findEvictionCandidateIndex(): number | undefined {
   }
 
   return worstIndex;
+}
+
+export function waitForBufferedFactsPersistence(): Promise<void> {
+  return store.waitForPendingWrites();
 }
