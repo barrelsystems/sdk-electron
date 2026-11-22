@@ -1,23 +1,48 @@
 import { EventEmitter } from "node:events";
 import type { AutoUpdater } from "electron";
 
-// A separate, minimal fake from the unit tests' own `mockApp` (mocked via
-// `vi.mock("electron", () => ({ app: mockApp }))`) -- `app.isPackaged` is
-// the only member the adapter under test actually reads.
-export const app = { isPackaged: false };
+export const activity = { checks: 0, downloads: 0, applies: 0 };
+let available = false;
 
-/** A real `EventEmitter` patched with the non-event methods a fake
- * adapter object needs -- the shared shape behind every fake in this
- * test service. The caller casts to its own target interface. */
+export const app = Object.assign(new EventEmitter(), {
+  isPackaged: false,
+  getVersion: () => "1.0.0",
+  getPath: () => process.env["BARREL_TEST_DATA_DIR"] ?? "",
+  getName: () => "TestService",
+  quit: () => {},
+});
+
+export const powerMonitor = new EventEmitter();
+export const BrowserWindow = { getAllWindows: () => [] };
+
 export function createFakeEmitter(methods: Record<string, unknown>): EventEmitter {
   return Object.assign(new EventEmitter(), methods);
 }
 
-// `createUpdaterAdapter`'s builtin fallback imports this module's own
-// `autoUpdater` directly (unlike `electron-updater`, it's not injectable),
-// so the test-service must inject events through this same singleton.
 export const autoUpdater = createFakeEmitter({
-  checkForUpdates: () => {},
-  quitAndInstall: () => {},
+  checkForUpdates() {
+    activity.checks++;
+    autoUpdater.emit("checking-for-update");
+    if (available) autoUpdater.emit("update-available", { version: "2.0.0" });
+    else autoUpdater.emit("update-not-available");
+    return Promise.resolve();
+  },
+  downloadUpdate() {
+    activity.downloads++;
+    return Promise.resolve();
+  },
+  quitAndInstall() {
+    activity.applies++;
+  },
   setFeedURL: () => {},
+  autoDownload: false,
+  forceDevUpdateConfig: false,
 }) as AutoUpdater;
+
+Object.assign(globalThis, { __barrelTestAutoUpdater: autoUpdater });
+
+export function prepareAction(stage: "pre-download" | "pre-apply"): void {
+  available = true;
+  autoUpdater.emit("update-available", { version: "2.0.0" });
+  if (stage === "pre-apply") autoUpdater.emit("update-downloaded");
+}

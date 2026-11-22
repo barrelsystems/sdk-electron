@@ -10,6 +10,25 @@ registerHooks({
     context: ResolveHookContext,
     nextResolve: (specifier: string, context?: Partial<ResolveHookContext>) => ResolveFnOutput,
   ): ResolveFnOutput {
+    if (
+      context.parentURL?.endsWith("/src/index.ts") &&
+      (specifier === "./cadence.js" || specifier === "./hostControl.js")
+    ) {
+      return { url: new URL("./runtimeCapture.ts", import.meta.url).href, shortCircuit: true };
+    }
+
+    if (specifier === "electron-updater") {
+      if (process.env["BARREL_TEST_VARIANT"] === "builtin") throw new Error("optional peer absent");
+      return {
+        url: new URL("./fakeElectronUpdater.cjs", import.meta.url).href,
+        shortCircuit: true,
+      };
+    }
+
+    if (specifier === "electron-squirrel-startup") {
+      return { url: new URL("./fakeSquirrel.ts", import.meta.url).href, shortCircuit: true };
+    }
+
     if (specifier === "electron") {
       return { url: new URL("./fakeElectron.ts", import.meta.url).href, shortCircuit: true };
     }

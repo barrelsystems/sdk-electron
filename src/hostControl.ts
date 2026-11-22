@@ -22,6 +22,7 @@ export interface HostControlParams {
 export interface HostControl {
   downloadUpdate(): void;
   applyUpdate(): void;
+  settled(): Promise<void>;
 }
 
 /**
@@ -30,6 +31,13 @@ export interface HostControl {
  * must still land in time to stop either action.
  */
 export function startHostControl(params: HostControlParams): HostControl {
+  const pending = new Set<Promise<void>>();
+
+  function track(operation: Promise<void>): void {
+    pending.add(operation);
+    void operation.finally(() => pending.delete(operation));
+  }
+
   let pendingInstall = false;
   let quitHandlerRegistered = false;
   // Set right before quitAndInstall(), so a `failed` transition that
@@ -46,9 +54,11 @@ export function startHostControl(params: HostControlParams): HostControl {
   }
 
   function startDownload(): void {
-    void canProceed("pre-download").then((proceed) => {
-      if (proceed) params.adapter.downloadUpdate();
-    });
+    track(
+      canProceed("pre-download").then((proceed) => {
+        if (proceed) params.adapter.downloadUpdate();
+      }),
+    );
   }
 
   async function applyNow(): Promise<void> {
@@ -71,10 +81,12 @@ export function startHostControl(params: HostControlParams): HostControl {
       pendingInstall = false;
       event.preventDefault();
 
-      void canProceed("pre-apply").then((proceed) => {
-        if (proceed) void applyNow();
-        else app.quit();
-      });
+      track(
+        canProceed("pre-apply").then(async (proceed) => {
+          if (proceed) await applyNow();
+          else app.quit();
+        }),
+      );
     });
   }
 
@@ -95,6 +107,9 @@ export function startHostControl(params: HostControlParams): HostControl {
   });
 
   return {
+    async settled() {
+      while (pending.size > 0) await Promise.all(pending);
+    },
     downloadUpdate(): void {
       if (params.adapter.getAdapterState().type !== "available") return;
       startDownload();
@@ -107,9 +122,11 @@ export function startHostControl(params: HostControlParams): HostControl {
       // through instead of running a second pre-apply check and apply.
       pendingInstall = false;
 
-      void canProceed("pre-apply").then((proceed) => {
-        if (proceed) void applyNow();
-      });
+      track(
+        canProceed("pre-apply").then(async (proceed) => {
+          if (proceed) await applyNow();
+        }),
+      );
     },
   };
 }

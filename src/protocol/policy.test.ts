@@ -12,6 +12,29 @@ function toPem(publicKey: KeyObject): string {
 }
 
 describe("verifyAndParsePolicy", () => {
+  it.each([
+    "not json",
+    "null",
+    '"current"',
+    '{"type":"unknown","issuedAt":"x","environment":"test"}',
+    '{"type":"held"}',
+    '{"type":"held","issuedAt":"x","environment":"test","reason":42}',
+    '{"type":"updateEligible","issuedAt":"x","environment":"test","priority":"urgent"}',
+  ])("rejects a signed malformed Policy: %s", (policy) => {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+
+    expect(
+      verifyAndParsePolicy(
+        {
+          protocolVersion: 1,
+          policy,
+          signature: signPolicy(policy, privateKey),
+        },
+        toPem(publicKey),
+      ),
+    ).toBeUndefined();
+  });
+
   it("parses a validly-signed policy", () => {
     const { publicKey, privateKey } = generateKeyPairSync("ed25519");
     const policy = JSON.stringify({
