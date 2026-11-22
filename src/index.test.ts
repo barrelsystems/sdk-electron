@@ -49,6 +49,8 @@ describe("init", () => {
   beforeEach(() => {
     vi.resetModules();
     fakeAdapter.reset();
+    // Keep startup facts buffered until a test explicitly acknowledges a check-in.
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     userDataDir = mkdtempSync(join(tmpdir(), "barrel-sdk-userdata-"));
     (process as { type?: string }).type = "browser";
   });
@@ -95,6 +97,7 @@ describe("init", () => {
     const { init } = await import("./index.js");
     init({ credential: "cred" });
     expect(() => init({ credential: "cred-2" })).not.toThrow();
+    await vi.waitFor(() => expect(fakeAdapter.listenerCount()).toBeGreaterThan(0));
   });
 
   it("getPolicy() returns undefined before any successful check-in", async () => {
@@ -152,7 +155,9 @@ describe("init", () => {
     await vi.waitFor(() => expect(fakeAdapter.listenerCount()).toBeGreaterThan(0));
 
     expect(getLastUpdateError()).toBeUndefined();
-    expect(JSON.parse(readFileSync(expectationPath, "utf8"))).toEqual({});
+    await vi.waitFor(() => {
+      expect(JSON.parse(readFileSync(expectationPath, "utf8"))).toEqual({});
+    });
   });
 
   it("applyUpdate() is a safe no-op before init() has resolved", async () => {
