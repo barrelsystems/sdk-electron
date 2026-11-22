@@ -1,6 +1,7 @@
 import { app } from "electron";
+import { release } from "node:os";
 import { classifyAndRecordFailure } from "../errorTaxonomy.js";
-import { guardAdapterCallback } from "../internalDefects.js";
+import { guardAdapterCallback, recordInternalDefect } from "../internalDefects.js";
 import { recordAdapterStateFact } from "../persistence/bufferedFacts.js";
 import type { AdapterState, UpdateFailure } from "../types.js";
 import { mapElectronUpdaterError } from "./electronUpdaterErrorMap.js";
@@ -14,7 +15,9 @@ export interface UpdaterReleaseNoteInfo {
 
 /** The slice of electron-updater's real `UpdateInfo` this adapter reads. */
 export interface UpdaterUpdateInfo {
+  version: string;
   releaseNotes?: string | UpdaterReleaseNoteInfo[] | null;
+  minimumSystemVersion?: string;
 }
 
 /**
@@ -36,6 +39,7 @@ export interface ElectronUpdaterLike {
   setFeedURL(options: { provider: "generic"; url: string }): void;
   autoDownload: boolean;
   forceDevUpdateConfig: boolean;
+  isUpdateSupported: (updateInfo: UpdaterUpdateInfo) => boolean | Promise<boolean>;
 }
 
 export interface UpdaterAdapter {
@@ -46,6 +50,9 @@ export interface UpdaterAdapter {
   setFeedURL(url: string): void;
   getAdapterState(): AdapterState;
   getLastUpdateError(): UpdateFailure | undefined;
+  /** The version currently available/downloaded, if any -- `undefined`
+   * before `update-available` has ever fired. */
+  getTargetVersion(): string | undefined;
   /** Multicast: host-control registers its own listener, and the public
    * `onStateChange` export registers the host app's on top of it. */
   onStateChange(listener: (state: AdapterState) => void): void;
@@ -73,6 +80,20 @@ function withReleaseNotes<T extends object>(
   return { ...base, ...(notes !== undefined && { releaseNotes: notes }) };
 }
 
+/** Compares dotted numeric OS version strings (`os.release()`,
+ * `minimumSystemVersion`) -- not general semver, since that's all either
+ * one ever is. `null` when either side isn't purely numeric. */
+function compareOsVersions(a: string, b: string): number | null {
+  const aParts = a.split(".").map(Number);
+  const bParts = b.split(".").map(Number);
+  if (aParts.some(Number.isNaN) || bParts.some(Number.isNaN)) return null;
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const diff = (aParts[i] ?? 0) - (bParts[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 /** Owns `electron-updater`'s singleton entirely -- the host never calls it directly. */
 export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): UpdaterAdapter {
   // Full-wrap: host-control owns every download's timing via its own
@@ -83,6 +104,7 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
   let lastError: UpdateFailure | undefined;
   let currentPhase: "check" | "download" | "idle" = "idle";
   let currentReleaseNotes: string | undefined;
+  let targetVersion: string | undefined;
   const stateChangeListeners = createListenerSet<AdapterState>();
 
   function setState(newState: AdapterState): void {
@@ -90,6 +112,34 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
     recordAdapterStateFact(newState);
     stateChangeListeners.notify(newState);
   }
+
+  // Mirrors electron-updater's own default `checkIfUpdateSupported` -- the
+  // only behavioral difference is reporting this host's disqualification
+  // instead of collapsing silently into `update-not-available`.
+  updater.isUpdateSupported = (updateInfo) => {
+    try {
+      const minimumSystemVersion = updateInfo.minimumSystemVersion;
+      if (minimumSystemVersion === undefined) return true;
+      const comparison = compareOsVersions(release(), minimumSystemVersion);
+      // electron-updater's own default fails open on an unparseable version too.
+      if (comparison === null || comparison >= 0) return true;
+      const built = classifyAndRecordFailure(
+        "electron-updater",
+        "platform-unsupported",
+        "config",
+        "isUpdateSupported:minimumSystemVersion",
+      );
+      lastError = built.failure;
+      setState(built.state);
+      return false;
+    } catch {
+      // Every sibling integration point here uses guardAdapterCallback,
+      // which can't apply to a value-returning callback -- this is the
+      // fail-open equivalent for this one.
+      recordInternalDefect("electron-updater:isUpdateSupported");
+      return true;
+    }
+  };
 
   updater.on("checking-for-update", () => {
     guardAdapterCallback("electron-updater:checking-for-update", () => {
@@ -102,6 +152,7 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
     guardAdapterCallback("electron-updater:update-not-available", () => {
       currentPhase = "idle";
       currentReleaseNotes = undefined;
+      targetVersion = undefined;
       setState({ type: "idle" });
     });
   });
@@ -110,6 +161,7 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
     guardAdapterCallback("electron-updater:update-available", () => {
       currentPhase = "download";
       currentReleaseNotes = normalizeReleaseNotes(info?.releaseNotes);
+      targetVersion = info?.version;
       setState(withReleaseNotes({ type: "available" }, currentReleaseNotes));
     });
   });
@@ -136,6 +188,7 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
     guardAdapterCallback("electron-updater:update-cancelled", () => {
       currentPhase = "idle";
       currentReleaseNotes = undefined;
+      targetVersion = undefined;
       setState({ type: "update-cancelled" });
     });
   });
@@ -149,6 +202,7 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
       setState(built.state);
       currentPhase = "idle";
       currentReleaseNotes = undefined;
+      targetVersion = undefined;
     });
   });
 
@@ -175,6 +229,7 @@ export function createElectronUpdaterAdapter(updater: ElectronUpdaterLike): Upda
     },
     getAdapterState: () => state,
     getLastUpdateError: () => lastError,
+    getTargetVersion: () => targetVersion,
     onStateChange: stateChangeListeners.add,
   };
 }

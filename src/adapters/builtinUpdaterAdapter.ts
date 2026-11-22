@@ -17,6 +17,7 @@ import { createListenerSet } from "./listenerSet.js";
 export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapter {
   let state: AdapterState = { type: "idle" };
   let lastError: UpdateFailure | undefined;
+  let targetVersion: string | undefined;
   // Set right before `quitAndInstall()` calls into the platform updater, so
   // an 'error' that fires afterward is classified as a relaunch failure, not
   // a check failure -- cleared once that error is handled either way.
@@ -43,6 +44,7 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
 
   updater.on("update-not-available", () => {
     guardAdapterCallback("electron-builtin:update-not-available", () => {
+      targetVersion = undefined;
       setState({ type: "idle" });
     });
   });
@@ -56,8 +58,9 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
   // Electron's own types pass `releaseNotes` as the second positional
   // argument here -- `update-available` carries no such payload, so
   // `available` never gets release notes, only `downloaded` does.
-  updater.on("update-downloaded", (_event, releaseNotes) => {
+  updater.on("update-downloaded", (_event, releaseNotes, releaseName) => {
     guardAdapterCallback("electron-builtin:update-downloaded", () => {
+      targetVersion = releaseName !== "" ? releaseName : undefined;
       setState({
         type: "downloaded",
         ...(releaseNotes !== "" && releaseNotes !== undefined && { releaseNotes }),
@@ -69,6 +72,7 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
     guardAdapterCallback("electron-builtin:error", () => {
       const operation: BuiltinOperation = awaitingRelaunch ? "relaunching" : "checking";
       awaitingRelaunch = false;
+      targetVersion = undefined;
       const { failureMode, phase } = mapBuiltinUpdaterError(error, operation);
       recordFailure(failureMode, phase, error.message);
     });
@@ -102,6 +106,7 @@ export function createBuiltinUpdaterAdapter(updater: AutoUpdater): UpdaterAdapte
     },
     getAdapterState: () => state,
     getLastUpdateError: () => lastError,
+    getTargetVersion: () => targetVersion,
     onStateChange: stateChangeListeners.add,
   };
 }

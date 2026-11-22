@@ -27,6 +27,7 @@ describe("createUpdaterAdapter", () => {
         setFeedURL: vi.fn(),
         autoDownload: true,
         forceDevUpdateConfig: false,
+        isUpdateSupported: vi.fn(),
       },
     }));
     adapter.checkForUpdates();

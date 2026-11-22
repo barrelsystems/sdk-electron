@@ -68,6 +68,8 @@ export type UpdateFailureMode =
   | "config-invalid"
   | "cors-misconfigured"
   | "translocation-blocked"
+  | "platform-unsupported"
+  | "apply-not-confirmed"
   | "unknown";
 
 export interface UpdateFailure {
@@ -75,7 +77,7 @@ export interface UpdateFailure {
   failureMode: UpdateFailureMode;
   /** Resolved from a static lookup table at return time -- never persisted or transmitted. */
   title: string;
-  platform: "electron-updater" | "electron-builtin";
+  platform: "electron-updater" | "electron-builtin" | "version-check";
   platformCode: string;
 }
 

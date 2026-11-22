@@ -53,6 +53,26 @@ describe("createBuiltinUpdaterAdapter", () => {
     expect("releaseNotes" in adapter.getAdapterState()).toBe(false);
   });
 
+  it("tracks the downloaded release's name as the apply target version", () => {
+    const updater = createFakeUpdater();
+    const adapter = createBuiltinUpdaterAdapter(updater);
+
+    expect(adapter.getTargetVersion()).toBeUndefined();
+    updater.emit("update-downloaded", {}, "notes", "2.0.0", new Date(), "url");
+    expect(adapter.getTargetVersion()).toBe("2.0.0");
+  });
+
+  it("clears the target version once the cycle ends without applying", () => {
+    const updater = createFakeUpdater();
+    const adapter = createBuiltinUpdaterAdapter(updater);
+
+    updater.emit("update-downloaded", {}, "notes", "2.0.0", new Date(), "url");
+    expect(adapter.getTargetVersion()).toBe("2.0.0");
+
+    updater.emit("error", new Error("boom"));
+    expect(adapter.getTargetVersion()).toBeUndefined();
+  });
+
   it("never synthesizes a downloading state, even though macOS has already started downloading by update-available", () => {
     const updater = createFakeUpdater();
     const adapter = createBuiltinUpdaterAdapter(updater);

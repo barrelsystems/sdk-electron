@@ -25,6 +25,9 @@ const FAILURE_MODE_TITLES: Record<UpdateFailureMode, string> = {
   "config-invalid": "The updater's configuration is invalid.",
   "cors-misconfigured": "The update server's CORS headers are misconfigured.",
   "translocation-blocked": "macOS App Translocation blocked the update.",
+  "platform-unsupported": "An update exists, but this host's OS version can't take it.",
+  "apply-not-confirmed":
+    "The app quit to apply an update, but never came back up on the new version.",
   unknown: "An unclassified update failure occurred.",
 };
 

@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import { release } from "node:os";
 import {
   createElectronUpdaterAdapter,
   type ElectronUpdaterLike,
@@ -7,6 +8,7 @@ import {
 
 const mockApp = vi.hoisted(() => ({ isPackaged: false }));
 vi.mock("electron", () => ({ app: mockApp }));
+vi.mock("node:os", () => ({ release: vi.fn() }));
 
 function createFakeUpdater(): ElectronUpdaterLike & EventEmitter {
   const emitter = new EventEmitter() as ElectronUpdaterLike & EventEmitter;
@@ -283,5 +285,62 @@ describe("createElectronUpdaterAdapter", () => {
 
     expect(first).toEqual([{ type: "checking" }]);
     expect(second).toEqual([{ type: "checking" }]);
+  });
+
+  it("reports platform-unsupported, not idle, when a real update exceeds the host's OS version", () => {
+    vi.mocked(release).mockReturnValue("19.0.0");
+    const updater = createFakeUpdater();
+    const adapter = createElectronUpdaterAdapter(updater);
+
+    const supported = updater.isUpdateSupported({
+      version: "2.0.0",
+      minimumSystemVersion: "20.0.0",
+    });
+
+    expect(supported).toBe(false);
+    expect(adapter.getAdapterState()).toEqual({
+      type: "failed",
+      category: "updater",
+      code: "platform-unsupported",
+      platformCode: "isUpdateSupported:minimumSystemVersion",
+    });
+    expect(adapter.getLastUpdateError()).toMatchObject({
+      phase: "config",
+      failureMode: "platform-unsupported",
+    });
+  });
+
+  it("supports the update when the host OS satisfies minimumSystemVersion", () => {
+    vi.mocked(release).mockReturnValue("21.0.0");
+    const updater = createFakeUpdater();
+    createElectronUpdaterAdapter(updater);
+
+    expect(updater.isUpdateSupported({ version: "2.0.0", minimumSystemVersion: "20.0.0" })).toBe(
+      true,
+    );
+  });
+
+  it("supports the update when the release declares no minimumSystemVersion", () => {
+    const updater = createFakeUpdater();
+    createElectronUpdaterAdapter(updater);
+
+    expect(updater.isUpdateSupported({ version: "2.0.0" })).toBe(true);
+  });
+
+  it("fails open, like electron-updater's own default, when minimumSystemVersion isn't parseable", () => {
+    vi.mocked(release).mockReturnValue("19.0.0");
+    const updater = createFakeUpdater();
+    createElectronUpdaterAdapter(updater);
+
+    expect(
+      updater.isUpdateSupported({ version: "2.0.0", minimumSystemVersion: "not-a-version" }),
+    ).toBe(true);
+  });
+
+  it("a bug in isUpdateSupported's own logic never escapes or crashes electron-updater's call", () => {
+    const updater = createFakeUpdater();
+    createElectronUpdaterAdapter(updater);
+
+    expect(updater.isUpdateSupported(null as never)).toBe(true);
   });
 });
