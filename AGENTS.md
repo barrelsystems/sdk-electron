@@ -4,7 +4,7 @@ State a rule here only if it's short and always relevant. Push anything longer
 or conditional to a pointed-to doc. This repo is published publicly — never
 add a reference here (or anywhere else in this repo) to internal tooling,
 ticket IDs, team names, or a non-public sibling repo's name/path
-(`infrastructure`, the Home Repo). The other public repos in this SDK family
+(including private workspace paths). The other public repos in this SDK family
 (sdk-electron/sdk-tauri/sdk-swift/sdk-conformance-harness) may be referenced
 where structurally necessary — a dependency, a CI job driving the
 conformance harness.
@@ -21,10 +21,15 @@ optional peer dependency, detected at runtime, never a plain dependency.
 
 ## Error handling
 
-Every I/O path (installation-ID persistence, check-in requests, Policy
-signature verification) fails open: keep the prior state, never throw, never
-retry in a loop. A thrown error is reserved for synchronous, caller-fixable
-misconfiguration (e.g. a blank credential passed to `init()`).
+Background reporting, verification, and persistence fail open: retain prior
+state and avoid retry loops. Initialization rejects caller-fixable configuration.
+Explicit update commands return classified action errors for denial or failure.
+
+## SDK parity
+
+Align product namespaces, public behavior, and concern ownership across SDK ports.
+Language conventions and documented native capabilities may differ. When fixing a
+protocol or lifecycle bug, check the other ports for the same defect.
 
 ## Commit policy
 
@@ -44,6 +49,9 @@ each explanation self-contained. A comment is at most 3 lines.
 
 Named, top-level functions are `function` declarations, not arrow functions
 assigned to `const`. Arrow functions are for callbacks and inline handlers.
+
+Use a `const` arrow when capturing a value narrowed earlier in the same scope;
+a hoisted function declaration loses that narrowing.
 
 ## Function arguments
 

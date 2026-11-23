@@ -1,56 +1,49 @@
-const policyEl = document.querySelector("#policy");
-const adapterStateEl = document.querySelector("#adapter-state");
-const errorEl = document.querySelector("#error");
-const applyButton = document.querySelector("#apply-update");
+const message = document.querySelector("#update-state");
+const progress = document.querySelector("#update-progress");
+const restart = document.querySelector("#apply-update");
 
-function describePolicy(policy) {
-  if (!policy) return "Waiting for first check-in…";
-  switch (policy.type) {
-    case "current":
-      return `Current (environment: ${policy.environment}, issued ${policy.issuedAt})`;
-    case "held":
-      return `Held${policy.reason ? ` — ${policy.reason}` : ""} (environment: ${policy.environment})`;
-    case "updateEligible":
-      return `Update eligible${policy.priority ? ` (${policy.priority} priority)` : ""} (environment: ${policy.environment})`;
-    default:
-      return "Unknown policy";
-  }
-}
+if (
+  !(message instanceof HTMLElement) ||
+  !(progress instanceof HTMLProgressElement) ||
+  !(restart instanceof HTMLButtonElement)
+)
+  throw new Error("Update view is incomplete");
 
-function describeAdapterState(adapterState) {
-  if (!adapterState) return "Idle";
-  switch (adapterState.type) {
-    case "idle":
-      return "Idle";
-    case "checking":
-      return "Checking for updates…";
-    case "available":
-      return "Update available";
-    case "downloading":
-      return `Downloading${adapterState.progress !== undefined ? ` (${adapterState.progress}%)` : ""}…`;
-    case "downloaded":
-      return "Update downloaded";
-    case "update-cancelled":
-      return "Update cancelled";
-    case "failed":
-      return `Failed (${adapterState.category}: ${adapterState.code})`;
-    default:
-      return "Unknown";
-  }
-}
+const messages = {
+  idle: "Updates run in the background.",
+  checking: "Checking for updates…",
+  available: "An update is available.",
+  downloading: "Downloading update…",
+  downloaded: "Your update is ready.",
+  applying: "Restarting…",
+  "update-cancelled": "The update was cancelled.",
+  failed: "The update couldn’t be completed. We’ll check again later.",
+};
 
-async function refresh() {
-  const status = await window.barrel.getStatus();
-  policyEl.textContent = describePolicy(status.policy);
-  adapterStateEl.textContent = describeAdapterState(status.adapterState);
-  errorEl.textContent = status.lastUpdateError
-    ? `${status.lastUpdateError.title} (${status.lastUpdateError.failureMode})`
-    : "None this session";
-}
+const observeUpdates = async () => {
+  const remove = await window.updates.subscribe(({ state }) => {
+    message.textContent = messages[state.type];
+    restart.hidden = state.type !== "downloaded";
+    progress.hidden = state.type !== "downloading";
+    if (state.type === "downloading" && state.progress !== undefined)
+      progress.value = state.progress;
+    else progress.removeAttribute("value");
+  });
 
-applyButton.addEventListener("click", () => {
-  void window.barrel.applyUpdate();
+  window.addEventListener("beforeunload", remove, { once: true });
+};
+
+void observeUpdates().catch(() => {
+  message.textContent = "Couldn’t connect to the update service.";
 });
 
-void refresh();
-setInterval(refresh, 2000);
+restart.addEventListener("click", async () => {
+  restart.disabled = true;
+  try {
+    await window.updates.apply();
+  } catch {
+    message.textContent = "The update couldn’t be installed. Please try again.";
+  } finally {
+    restart.disabled = false;
+  }
+});

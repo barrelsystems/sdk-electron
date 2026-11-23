@@ -1,9 +1,25 @@
-// A sandboxed preload script can only `require()` `electron` itself --
-// never a third-party package. `exposeBarrelBridge()` only works for a
-// *bundled* preload (the Forge example, via Vite); this plain one can't.
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("barrel", {
-  getStatus: () => ipcRenderer.invoke("barrel:getStatus"),
-  applyUpdate: () => ipcRenderer.invoke("barrel:applyUpdate"),
-});
+/** @type {Window["updates"]} */
+const updates = {
+  async subscribe(listener) {
+    /** @param {Electron.IpcRendererEvent} _event @param {import("@barrel-kit/sdk-electron").Updates.Status} status */
+    function receive(_event, status) {
+      listener(status);
+    }
+
+    ipcRenderer.on("updates:status", receive);
+
+    try {
+      await ipcRenderer.invoke("updates:subscribe");
+    } catch (error) {
+      ipcRenderer.removeListener("updates:status", receive);
+      throw error;
+    }
+
+    return () => ipcRenderer.removeListener("updates:status", receive);
+  },
+  apply: () => ipcRenderer.invoke("updates:apply"),
+};
+
+contextBridge.exposeInMainWorld("updates", updates);

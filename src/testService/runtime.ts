@@ -8,8 +8,7 @@ import {
   triggerLifecycle,
 } from "./resilienceCommands.js";
 import { runBufferCommand } from "./bufferCommands.js";
-import * as sdk from "../index.js";
-import { cadence, hostControl } from "./runtimeCapture.js";
+import { sdk, cadence, hostControl } from "./runtimeCapture.js";
 import { activity, autoUpdater, prepareAction } from "./fakeElectron.js";
 import type { AdapterCommand, CreateAdapterRequest } from "@barrel-kit/sdk-conformance-harness";
 
@@ -18,6 +17,10 @@ Object.defineProperty(process, "type", { value: "browser" });
 
 export async function command(payload: AdapterCommand): Promise<unknown> {
   switch (payload.command) {
+    case "prepareUpdaterFailure":
+      autoUpdater.emit("error", new Error("fixture updater failure"));
+      await hostControl?.settled();
+      return null;
     case "getCadenceState":
       return cadenceState();
     case "triggerLifecycle":
@@ -36,12 +39,12 @@ export async function command(payload: AdapterCommand): Promise<unknown> {
       return runBufferCommand(payload);
     case "probeBufferExit":
       throw new Error("exit probes run in their own process");
-    case "getPolicy":
-      return sdk.getPolicy() ?? null;
-    case "getAdapterState":
-      return sdk.getAdapterState() ?? null;
+    case "getUpdateEligibility":
+      return sdk.getStatus().eligibility ?? null;
+    case "getUpdateState":
+      return sdk.getStatus().state;
     case "getLastUpdateError":
-      return sdk.getLastUpdateError() ?? null;
+      return sdk.getStatus().lastError ?? null;
     case "getUpdaterActivity":
       return { ...activity };
     case "checkNow":
@@ -53,17 +56,12 @@ export async function command(payload: AdapterCommand): Promise<unknown> {
       await hostControl?.settled();
       return null;
     case "runAction":
-      if (payload.stage === "pre-download") sdk.downloadUpdate();
-      else sdk.applyUpdate();
+      // The command endpoint reports action outcomes through state and activity instead of
+      // HTTP errors.
+      if (payload.stage === "pre-download") await sdk.download().catch(() => {});
+      else await sdk.apply().catch(() => {});
       await hostControl?.settled();
       return { ...activity };
-    case "injectEvent":
-      autoUpdater.emit(
-        payload.eventName,
-        ...(Array.isArray(payload.payload) ? payload.payload : []),
-      );
-      await hostControl?.settled();
-      return null;
   }
 }
 
@@ -83,13 +81,15 @@ export async function initialize(config: CreateAdapterRequest): Promise<void> {
   sdk.init({
     credential: "test-service",
     baseUrl: config.checkInBaseUrl,
-    channel: config.channel ?? "stable",
-    autoDownload: false,
-    ...(config.attributes === undefined ? {} : { attributes: config.attributes }),
     ...(config.debug === undefined ? {} : { debug: config.debug }),
-    ...(config.checkInIntervalMs === undefined
-      ? {}
-      : { checkInIntervalMs: config.checkInIntervalMs }),
+    updates: {
+      channel: config.channel ?? "stable",
+      autoDownload: false,
+      ...(config.attributes === undefined ? {} : { attributes: config.attributes }),
+      ...(config.checkInIntervalMs === undefined
+        ? {}
+        : { checkInIntervalMs: config.checkInIntervalMs }),
+    },
   });
 
   while (!cadence) await new Promise<void>((resolve) => setTimeout(resolve, 1));

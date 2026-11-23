@@ -1,10 +1,10 @@
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { waitForInstallationIdPersistence } from "../persistence/installationId.js";
+import { waitForInstallationIdPersistence } from "../updates/persistence/installationId.js";
 import { app, powerMonitor } from "./fakeElectron.js";
 import { cadence } from "./runtimeCapture.js";
 
-export const debugMessages: string[] = [];
+const debugMessages: string[] = [];
 
 export function captureDebugMessages(): void {
   console.debug = (...values: unknown[]) => {

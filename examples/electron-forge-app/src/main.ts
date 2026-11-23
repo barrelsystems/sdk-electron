@@ -1,7 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
-import { init } from '@barrel-kit/sdk-electron';
-import { registerIpcHandlers } from '@barrel-kit/sdk-electron/ipc';
+import { init, Updates } from '@barrel-kit/sdk-electron';
 
 // init() owns the Squirrel-startup check itself (quitting before any window
 // exists when needed) -- a host app must never also check
@@ -9,18 +8,13 @@ import { registerIpcHandlers } from '@barrel-kit/sdk-electron/ipc';
 init({
   credential: process.env.BARREL_CREDENTIAL ?? '',
   baseUrl: process.env.BARREL_BASE_URL,
-  updateFeedURL: process.env.BARREL_UPDATE_FEED_URL,
   debug: true,
-  // Stops at the real "available" state rather than also auto-downloading:
-  // a real download hands off to Squirrel's native apply machinery, which
-  // needs a real code signature this unsigned test/demo build never has.
-  autoDownload: !process.env.BARREL_UPDATE_FEED_URL,
+  updates: {
+    updateFeedURL: process.env.BARREL_UPDATE_FEED_URL,
+  },
 });
 
-registerIpcHandlers();
-
-const createWindow = () => {
-  // Create the browser window.
+function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
@@ -29,7 +23,37 @@ const createWindow = () => {
     },
   });
 
-  // and load the index.html of the app.
+  const contents = mainWindow.webContents;
+  let subscription: Updates.Subscription | undefined;
+
+  function stop() {
+    subscription?.remove();
+    subscription = undefined;
+  }
+
+  contents.ipc.handle('updates:subscribe', (event) => {
+    if (event.senderFrame !== contents.mainFrame)
+      throw new Error('Invalid frame');
+
+    stop();
+    subscription = Updates.subscribe((status) =>
+      contents.send('updates:status', status),
+    );
+  });
+  contents.ipc.handle('updates:apply', (event) => {
+    if (event.senderFrame !== contents.mainFrame)
+      throw new Error('Invalid frame');
+
+    return Updates.apply();
+  });
+  contents.on('did-start-navigation', (_event, _url, inPlace, isMainFrame) => {
+    if (isMainFrame && !inPlace) stop();
+  });
+  contents.once('destroyed', stop);
+
+  mainWindow.webContents.on('will-navigate', (event) => event.preventDefault());
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
@@ -37,19 +61,12 @@ const createWindow = () => {
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
     );
   }
+}
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
-};
-
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   createWindow();
 
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
+  // Reopen a window when the macOS dock activates an otherwise windowless app.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -57,9 +74,7 @@ app.whenReady().then(() => {
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// macOS keeps the process running after its last window closes.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();

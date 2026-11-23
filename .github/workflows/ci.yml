@@ -48,11 +48,19 @@ jobs:
             exit 1
           fi
 
+      - name: Install example dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: pnpm install:examples
+
       - name: Format check
         run: pnpm format:check
 
       - name: Lint
         run: pnpm lint
+
+      - name: Unused code
+        run: pnpm unused
 
       - name: Typecheck
         run: pnpm typecheck
@@ -62,6 +70,11 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Validate packaged SDK in both examples
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: pnpm check:examples
 
       - name: Check bundle size
         run: pnpm size

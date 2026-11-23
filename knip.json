@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/knip/schema.json",
+  "workspaces": {
+    ".": {
+      "project": ["src/**/*.{ts,cjs}", "tests/**/*.ts", "scripts/**/*.ts"],
+      "ignoreDependencies": ["electron-updater", "electron-squirrel-startup"]
+    },
+    "examples/electron-builder-app": {
+      "entry": ["preload.cjs"],
+      "project": ["*.{js,cjs}"]
+    },
+    "examples/electron-forge-app": {
+      "entry": ["src/{main,preload,renderer}.ts"],
+      "project": ["*.mts", "src/**/*.ts"]
+    }
+  }
+}
