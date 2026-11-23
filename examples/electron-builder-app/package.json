@@ -10,7 +10,9 @@
     "start": "electron .",
     "dist": "electron-builder",
     "lint": "oxlint && oxfmt --check",
-    "lint:fix": "oxlint --fix && oxfmt --write"
+    "lint:fix": "oxlint --fix && oxfmt --write",
+    "typecheck": "tsc --noEmit",
+    "package": "electron-builder --dir --publish never"
   },
   "build": {
     "appId": "codes.barrel.examples.electron-builder-app",
@@ -30,13 +32,15 @@
     }
   },
   "devDependencies": {
-    "electron": "^45.3.4",
+    "electron": "^45.4.1",
     "electron-builder": "^26.18.0",
     "oxfmt": "^0.41.0",
-    "oxlint": "^1.94.0"
+    "oxlint": "^1.94.0",
+    "typescript": "^6.0.3",
+    "@types/node": "^24.0.0"
   },
   "dependencies": {
-    "@barrel-kit/sdk-electron": "file:../../barrel-kit-sdk-electron-0.0.1.tgz",
+    "@barrel-kit/sdk-electron": "link:../..",
     "electron-squirrel-startup": "^1.0.1",
     "electron-updater": "^6.8.11"
   },

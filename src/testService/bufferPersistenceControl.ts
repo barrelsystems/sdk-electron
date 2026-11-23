@@ -1,3 +1,4 @@
+import { writeSnapshot } from "../updates/persistence/persistenceWriter.js";
 import { mkdir, rm } from "node:fs/promises";
 import { basename } from "node:path";
 
@@ -7,7 +8,7 @@ let waiting = false;
 let release: (() => void) | undefined;
 let gate: Promise<void> | undefined;
 
-export async function beforeBufferWrite(path: string): Promise<void> {
+async function beforeBufferWrite(path: string): Promise<void> {
   if (basename(path) !== "barrel-buffered-facts.json" || !gate) return;
 
   waiting = true;
@@ -25,7 +26,8 @@ export async function setBufferPersistence(path: string, next: Mode): Promise<vo
   release = undefined;
   // The filesystem wrapper loads this module while persistence initializes.
   // Resolve the completion barrier only when a control command runs.
-  const { waitForBufferedFactsPersistence } = await import("../persistence/bufferedFacts.js");
+  const { waitForBufferedFactsPersistence } =
+    await import("../updates/persistence/bufferedFacts.js");
   await waitForBufferedFactsPersistence();
 
   if (mode === "failed") await rm(path, { recursive: true, force: true });
@@ -39,4 +41,9 @@ export async function setBufferPersistence(path: string, next: Mode): Promise<vo
     gate = new Promise<void>((resolve) => {
       release = resolve;
     });
+}
+
+export async function writeBufferSnapshot(path: string, data: string): Promise<void> {
+  await beforeBufferWrite(path);
+  await writeSnapshot(path, data);
 }

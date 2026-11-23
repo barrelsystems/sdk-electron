@@ -13,32 +13,22 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./ipc": {
-      "types": "./dist/ipc.d.ts",
-      "default": "./dist/ipc.js"
-    },
-    "./preload": {
-      "require": {
-        "types": "./dist/preload.d.cts",
-        "default": "./dist/preload.cjs"
-      },
-      "import": {
-        "types": "./dist/preload.d.ts",
-        "default": "./dist/preload.js"
-      }
     }
   },
   "scripts": {
     "build": "tsdown",
+    "prepare": "tsdown",
     "dev": "tsdown --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tools.json && tsc --noEmit -p examples/electron-builder-app/tsconfig.json && tsc --noEmit -p examples/electron-forge-app/tsconfig.json",
     "test": "vitest run",
     "test-service": "node --import tsx --import ./src/testService/registerElectronMock.ts src/testService/main.ts",
     "lint": "oxlint --disable-nested-config --max-warnings=0 .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "size": "size-limit"
+    "size": "size-limit",
+    "unused": "knip",
+    "check:examples": "tsx scripts/checkExamples.ts",
+    "install:examples": "pnpm --dir examples/electron-builder-app install --frozen-lockfile && pnpm --dir examples/electron-forge-app install --frozen-lockfile"
   },
   "devDependencies": {
     "@barrel-kit/sdk-conformance-harness": "github:barrelsystems/sdk-conformance-harness#dist",
@@ -49,10 +39,11 @@
     "electron": "^42.11.16",
     "electron-squirrel-startup": "^1.0.1",
     "electron-updater": "^6.8.11",
+    "knip": "^6.48.0",
     "oxfmt": "0.73.0",
     "oxlint": "1.88.0",
     "size-limit": "^14.3.0",
-    "tsdown": "^0.9.0",
+    "tsdown": "^0.23.7",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^5.1.0"
@@ -75,22 +66,9 @@
       "name": "import { init, ... } from '@barrel-kit/sdk-electron'",
       "path": [
         "dist/index.js",
-        "dist/src-*.js"
+        "dist/chunks/*.js"
       ],
       "limit": "15 KB"
-    },
-    {
-      "name": "import { registerIpcHandlers } from '@barrel-kit/sdk-electron/ipc'",
-      "path": [
-        "dist/ipc.js",
-        "dist/src-*.js"
-      ],
-      "limit": "15 KB"
-    },
-    {
-      "name": "import { exposeBarrelBridge } from '@barrel-kit/sdk-electron/preload'",
-      "path": "dist/preload.js",
-      "limit": "2 KB"
     }
   ],
   "engines": {

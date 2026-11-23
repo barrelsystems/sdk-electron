@@ -29,6 +29,7 @@ export const autoUpdater = createFakeEmitter({
   },
   downloadUpdate() {
     activity.downloads++;
+    autoUpdater.emit("update-downloaded");
     return Promise.resolve();
   },
   quitAndInstall() {

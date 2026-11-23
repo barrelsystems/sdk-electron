@@ -11,9 +11,9 @@ import {
 } from "@barrel-kit/sdk-conformance-harness";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpApiBuilder } from "effect/http-api";
+import { HttpApiBuilder, type HttpApiGroup } from "effect/http-api";
 import { probeBufferExit } from "./bufferExitProbe.js";
-import { computeJitterFraction } from "../jitter.js";
+import { computeJitterFraction } from "../updates/jitter.js";
 
 interface Worker {
   child: ChildProcess;
@@ -28,7 +28,6 @@ async function createWorker(config: CreateAdapterRequest): Promise<Worker> {
       ...process.env,
       BARREL_TEST_DATA_DIR: directory,
       BARREL_TEST_CONFIG: JSON.stringify(config),
-      BARREL_TEST_VARIANT: config.variant ?? "",
     },
     stdio: ["ignore", "inherit", "inherit", "ipc"],
   });
@@ -85,49 +84,50 @@ async function createWorker(config: CreateAdapterRequest): Promise<Worker> {
   };
 }
 
-export const RoutesLayer = Layer.unwrap(
-  Effect.sync(() => {
-    const workers = new Map<string, Worker>();
+export const RoutesLayer: Layer.Layer<HttpApiGroup.Service<"sdk-test-service", "testService">> =
+  Layer.unwrap(
+    Effect.sync(() => {
+      const workers = new Map<string, Worker>();
 
-    return HttpApiBuilder.group(TestServiceHttpApi, "testService", (handlers) =>
-      handlers
-        .handle("capabilities", () =>
-          Effect.succeed({ sdkName: "electron", sdkVersion: "0.0.1", supportsCheckIn: true }),
-        )
-        .handle("createAdapter", ({ payload }) =>
-          Effect.promise(async () => {
-            const worker = await createWorker(payload);
-            const id = randomUUID();
-            workers.set(id, worker);
-            return { id };
-          }),
-        )
-        .handle("runCommand", ({ params, payload }) =>
-          Effect.promise(async () => {
-            if (payload.command === "probeBufferExit")
-              return { result: await probeBufferExit(payload.mode, payload.facts) };
-            const worker = workers.get(params.id);
-            if (!worker) throw new Error("unknown SDK worker");
-            return { result: await worker.command(payload) };
-          }),
-        )
-        .handle("destroyAdapter", ({ params }) =>
-          Effect.promise(async () => {
-            const worker = workers.get(params.id);
-            if (!worker) return;
-            workers.delete(params.id);
-            if (worker.child.exitCode === null && worker.child.signalCode === null) {
-              await new Promise<void>((resolve) => {
-                worker.child.once("exit", () => resolve());
-                worker.child.kill();
-              });
-            }
-            await rm(worker.directory, { recursive: true, force: true });
-          }),
-        )
-        .handle("jitterFraction", ({ payload }) =>
-          Effect.succeed({ fraction: computeJitterFraction(payload.installationId) }),
-        ),
-    );
-  }),
-);
+      return HttpApiBuilder.group(TestServiceHttpApi, "testService", (handlers) =>
+        handlers
+          .handle("capabilities", () =>
+            Effect.succeed({ sdkName: "electron", sdkVersion: "0.0.1", supportsCheckIn: true }),
+          )
+          .handle("createAdapter", ({ payload }) =>
+            Effect.promise(async () => {
+              const worker = await createWorker(payload);
+              const id = randomUUID();
+              workers.set(id, worker);
+              return { id };
+            }),
+          )
+          .handle("runCommand", ({ params, payload }) =>
+            Effect.promise(async () => {
+              if (payload.command === "probeBufferExit")
+                return { result: await probeBufferExit(payload.mode, payload.facts) };
+              const worker = workers.get(params.id);
+              if (!worker) throw new Error("unknown SDK worker");
+              return { result: await worker.command(payload) };
+            }),
+          )
+          .handle("destroyAdapter", ({ params }) =>
+            Effect.promise(async () => {
+              const worker = workers.get(params.id);
+              if (!worker) return;
+              workers.delete(params.id);
+              if (worker.child.exitCode === null && worker.child.signalCode === null) {
+                await new Promise<void>((resolve) => {
+                  worker.child.once("exit", () => resolve());
+                  worker.child.kill();
+                });
+              }
+              await rm(worker.directory, { recursive: true, force: true });
+            }),
+          )
+          .handle("jitterFraction", ({ payload }) =>
+            Effect.succeed({ fraction: computeJitterFraction(payload.installationId) }),
+          ),
+      );
+    }),
+  );

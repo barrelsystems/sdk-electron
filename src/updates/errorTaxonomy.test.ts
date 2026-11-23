@@ -1,0 +1,54 @@
+import { describe, expect, it } from "vitest";
+import { categoryForPhase, resolveFailureTitle } from "./errorTaxonomy.js";
+import type { UpdateFailureMode } from "./models/failure.js";
+
+describe("resolveFailureTitle", () => {
+  it("resolves a static, non-empty title for every UpdateFailureMode", () => {
+    const modes: UpdateFailureMode[] = [
+      "manifest-unreachable",
+      "manifest-parse-failed",
+      "version-invalid",
+      "signature-missing",
+      "signature-invalid",
+      "signature-version-mismatch",
+      "checksum-mismatch",
+      "download-transport-failed",
+      "download-file-invalid",
+      "download-size-exceeded",
+      "download-stream-incomplete",
+      "diff-patch-incompatible",
+      "target-not-found-in-manifest",
+      "temp-storage-constraint",
+      "install-write-failed",
+      "install-auth-required-or-failed",
+      "install-relaunch-failed",
+      "install-missing-update",
+      "config-invalid",
+      "cors-misconfigured",
+      "translocation-blocked",
+      "unknown",
+    ];
+
+    for (const mode of modes) {
+      expect(resolveFailureTitle(mode).length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("categoryForPhase", () => {
+  it("maps check to check", () => {
+    expect(categoryForPhase("check")).toBe("check");
+  });
+
+  it("maps verify, download, and extract to download", () => {
+    expect(categoryForPhase("verify")).toBe("download");
+    expect(categoryForPhase("download")).toBe("download");
+    expect(categoryForPhase("extract")).toBe("download");
+  });
+
+  it("maps install, config, and unknown to updater", () => {
+    expect(categoryForPhase("install")).toBe("updater");
+    expect(categoryForPhase("config")).toBe("updater");
+    expect(categoryForPhase("unknown")).toBe("updater");
+  });
+});

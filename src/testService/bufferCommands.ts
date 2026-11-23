@@ -4,10 +4,10 @@ import type { AdapterCommand, FactObservation } from "@barrel-kit/sdk-conformanc
 import {
   clearBufferedFacts,
   getBufferedFacts,
-  recordAdapterStateFact,
+  recordLifecycleStateFact,
   recordUpdateErrorFact,
   waitForBufferedFactsPersistence,
-} from "../persistence/bufferedFacts.js";
+} from "../updates/persistence/bufferedFacts.js";
 import { blockedBufferWrite, setBufferPersistence } from "./bufferPersistenceControl.js";
 
 type BufferCommand = Extract<
@@ -24,13 +24,13 @@ type BufferCommand = Extract<
 >;
 
 export function recordObservation(fact: FactObservation): void {
-  if (fact.kind === "adapterState") {
+  if (fact.kind === "lifecycleState") {
     if (fact.state.type === "failed") {
       if (fact.state.code !== "unknown")
         throw new Error("fact fixture requires the unknown failure code");
 
-      recordAdapterStateFact({ ...fact.state, code: "unknown" });
-    } else recordAdapterStateFact(fact.state);
+      recordLifecycleStateFact({ ...fact.state, code: "unknown" });
+    } else recordLifecycleStateFact(fact.state);
   } else
     recordUpdateErrorFact({
       phase: "download",

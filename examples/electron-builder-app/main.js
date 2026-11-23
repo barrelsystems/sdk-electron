@@ -1,8 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { init } from "@barrel-kit/sdk-electron";
-import { registerIpcHandlers } from "@barrel-kit/sdk-electron/ipc";
+import { init, Updates } from "@barrel-kit/sdk-electron";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -12,15 +11,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 init({
   credential: process.env.BARREL_CREDENTIAL ?? "",
   baseUrl: process.env.BARREL_BASE_URL,
-  updateFeedURL: process.env.BARREL_UPDATE_FEED_URL,
   debug: true,
-  // Stops at the real "available" state rather than also auto-downloading:
-  // a real download hands off to Squirrel's native apply machinery, which
-  // needs a real code signature this unsigned test/demo build never has.
-  autoDownload: !process.env.BARREL_UPDATE_FEED_URL,
+  updates: {
+    updateFeedURL: process.env.BARREL_UPDATE_FEED_URL,
+  },
 });
-
-registerIpcHandlers();
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -30,6 +25,38 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
+
+  const contents = mainWindow.webContents;
+  /** @type {import("@barrel-kit/sdk-electron").Updates.Subscription | undefined} */
+  let subscription;
+
+  function stop() {
+    subscription?.remove();
+    subscription = undefined;
+  }
+
+  contents.ipc.handle("updates:subscribe", (event) => {
+    if (event.senderFrame !== contents.mainFrame)
+      throw new Error("Invalid frame");
+
+    stop();
+    subscription = Updates.subscribe((status) =>
+      contents.send("updates:status", status),
+    );
+  });
+  contents.ipc.handle("updates:apply", (event) => {
+    if (event.senderFrame !== contents.mainFrame)
+      throw new Error("Invalid frame");
+
+    return Updates.apply();
+  });
+  contents.on("did-start-navigation", (_event, _url, inPlace, isMainFrame) => {
+    if (isMainFrame && !inPlace) stop();
+  });
+  contents.once("destroyed", stop);
+
+  mainWindow.webContents.on("will-navigate", (event) => event.preventDefault());
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 }

@@ -1,3 +1,4 @@
+import { writeBufferSnapshot } from "./bufferPersistenceControl.js";
 import { fork } from "node:child_process";
 import { mkdtemp, readFile, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ import {
   configureBufferedFacts,
   getBufferedFacts,
   waitForBufferedFactsPersistence,
-} from "../persistence/bufferedFacts.js";
+} from "../updates/persistence/bufferedFacts.js";
 import { recordObservation } from "./bufferCommands.js";
 import { blockedBufferWrite, setBufferPersistence } from "./bufferPersistenceControl.js";
 
@@ -56,7 +57,7 @@ export async function runBufferExitProbe(config: string): Promise<void> {
     facts: FactObservation[];
   };
   const path = join(directory, "barrel-buffered-facts.json");
-  await configureBufferedFacts(path);
+  await configureBufferedFacts(path, { writeSnapshot: writeBufferSnapshot });
   if (reload) {
     await send(getBufferedFacts());
     process.exit(0);

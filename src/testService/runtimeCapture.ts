@@ -1,22 +1,29 @@
-import { startCadence as start, type Cadence, type CadenceParams } from "../cadence.js";
+import { startCadence as start, type Cadence, type CadenceParams } from "../updates/cadence.js";
 import {
   startHostControl as control,
   type HostControl,
   type HostControlParams,
-} from "../hostControl.js";
-
-export * from "../cadence.js";
-export * from "../hostControl.js";
+} from "../updates/hostControl.js";
+import { configureBufferedFacts } from "../updates/persistence/bufferedFacts.js";
+import { createRuntime } from "../updates/runtime.js";
+import { writeBufferSnapshot } from "./bufferPersistenceControl.js";
 
 export let cadence: Cadence | undefined;
 export let hostControl: HostControl | undefined;
 
-export function startCadence(params: CadenceParams): Cadence {
+function startCadence(params: CadenceParams): Cadence {
   cadence = start(params);
   return cadence;
 }
 
-export function startHostControl(params: HostControlParams): HostControl {
+function startHostControl(params: HostControlParams): HostControl {
   hostControl = control(params);
   return hostControl;
 }
+
+export const sdk = createRuntime({
+  startCadence,
+  startHostControl,
+  configureBufferedFacts: (path) =>
+    configureBufferedFacts(path, { writeSnapshot: writeBufferSnapshot }),
+});
