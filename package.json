@@ -2,6 +2,7 @@
   "name": "@barrel-kit/sdk-electron",
   "version": "0.0.1",
   "description": "Barrel's release-intelligence SDK for Electron apps.",
+  "license": "Apache-2.0",
   "files": [
     "dist"
   ],
